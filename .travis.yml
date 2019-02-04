@@ -7,6 +7,7 @@ python:
   - "3.4"
   - "3.5"
   - "3.6"
+  - "3.7"
 
 notifications:
   email: false
@@ -19,7 +20,7 @@ script:
   # Build and test extension module
   - python setup.py build_ext --inplace
   # Run doctests
-  - if [[ $TRAVIS_PYTHON_VERSION == '3.6' ]]; then (LD_LIBRARY_PATH="$TRAVIS_BUILD_DIR/tiledb:$LD_LIBRARY_PATH" python -m doctest -o NORMALIZE_WHITESPACE -f tiledb/libtiledb.pyx); fi
+  - if [[ $TRAVIS_PYTHON_VERSION == '3.6' ]] || [[ $TRAVIS_PYTHON_VERSION == '3.7' ]]; then (LD_LIBRARY_PATH="$TRAVIS_BUILD_DIR/tiledb:$LD_LIBRARY_PATH" python -m doctest -o NORMALIZE_WHITESPACE -f tiledb/libtiledb.pyx); fi
   # Run unittests
   - LD_LIBRARY_PATH="$TRAVIS_BUILD_DIR/tiledb:$LD_LIBRARY_PATH" python -m unittest tiledb.tests.all.suite_test
   # Check wheel build
