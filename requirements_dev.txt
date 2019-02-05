@@ -1,5 +1,5 @@
 # pinned dependencies for the development and CI
-cmake==3.11.0
+cmake==3.13.0
 cython==0.27.3
 numpy==1.7.2
 setuptools==18.0.1
