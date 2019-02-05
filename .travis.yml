@@ -1,5 +1,10 @@
-dist: trusty
-sudo: required
+
+matrix:
+  include:
+    - os: linux
+      dist: trusty
+      sudo: required
+    - os: osx
 
 language: python
 python:
