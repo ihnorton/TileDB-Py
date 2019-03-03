@@ -91,6 +91,10 @@ cdef extern from "tiledb/tiledb.h":
         TILEDB_PREORDER
         TILEDB_POSTORDER
 
+    ctypedef enum tiledb_serialization_type_t:
+        TILEDB_JSON
+        TILEDB_CAPNP
+
     ctypedef enum tiledb_filesystem_t:
         TILEDB_HDFS
         TILEDB_S3
@@ -531,6 +535,13 @@ cdef extern from "tiledb/tiledb.h":
         tiledb_ctx_t* ctx,
         const tiledb_array_schema_t* array_schema,
         FILE* out)
+
+    int tiledb_array_schema_serialize(
+            tiledb_ctx_t* ctx,
+            const tiledb_array_schema_t* array_schema,
+            tiledb_serialization_type_t serialize_type,
+            char** serialized_string,
+            uint64_t* serialized_string_length)
 
     # Query
     int tiledb_query_alloc(
@@ -1104,3 +1115,5 @@ cdef extern from "tiledb/tiledb.h":
         const char* uri,
         char* path_out,
         unsigned* path_length) nogil
+
+
