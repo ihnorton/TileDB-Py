@@ -4564,6 +4564,7 @@ cdef class DenseArray(Array):
             _raise_ctx_err(ctx_ptr, rc)
         return out
 
+    # this is necessary for python 2
     def __reduce__(self):
         return (_create_densearray, (type(self), self.__getstate__()))
 

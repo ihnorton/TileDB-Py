@@ -3,7 +3,6 @@ from tiledb.libtiledb import *
 
 import numpy as np
 
-import pdb
 def open(uri, key=None, attr=None, mode='r', config=None):
     if config:
         cfg = tiledb.Config(config)
