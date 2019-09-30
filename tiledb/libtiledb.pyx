@@ -205,7 +205,7 @@ cdef _write_array(tiledb_ctx_t* ctx_ptr,
 
         for i in range(nattr):
             if tiledb_array.schema.attr(i).isvar:
-                buffer, offsets = array_to_buffer(values[i])
+                buffer, offsets = array_to_buffer(values[i], tiledb_array.schema.attr(i).dtype)
                 buffer_offsets_sizes[i] = offsets.nbytes
             else:
                 buffer, offsets = values[i], None
@@ -3705,7 +3705,9 @@ cdef class Array(object):
             np.npy_intp dims[1]
             object newobj
             np.ndarray out_array
-            uint64_t el = 0, num_offsets = 0, buffer_size = 0
+            uint64_t el = 0
+            uint64_t num_offsets = 0
+            uint64_t buffer_size = 0
 
         cdef np.dtype el_dtype = self.schema.attr(name).dtype
 
@@ -3716,6 +3718,10 @@ cdef class Array(object):
 
         buffer_size = varbuf.nbytes
         num_offsets = len(offsets)
+
+        print("buffer size: ", buffer_size)
+        print("num_offsets: ", num_offsets)
+        print("offsets: ", offsets)
 
         if (self.schema.attr(name).isvar or
             np.issubdtype(el_dtype, np.unicode_) or

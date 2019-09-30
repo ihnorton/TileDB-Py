@@ -54,7 +54,7 @@ cdef _varlen_cell_dtype(object var):
 
     raise TypeError("Unsupported varlen cell datatype")
 
-def array_to_buffer(object val):
+def array_to_buffer(object val, np.dtype buf_dtype):
     cdef arr = <np.ndarray?>val
 
     if len(arr) == 0:
@@ -67,7 +67,7 @@ def array_to_buffer(object val):
 
     firstdtype = _varlen_cell_dtype(arr.flat[0])
     # item size
-    cdef uint64_t el_size = _varlen_dtype_itemsize(firstdtype)
+    cdef uint64_t el_size = _varlen_dtype_itemsize(buf_dtype)
 
     if el_size==0:
         raise TypeError("Zero-size cell elements are not supported.")
@@ -123,7 +123,7 @@ def array_to_buffer(object val):
             tmp_utf8 = subitem.encode("UTF-8")
             input_ptr = <char*>tmp_utf8
         else:
-            input_ptr = <char*>np.PyArray_DATA(subitem)
+            input_ptr = <char*>np.PyArray_DATA(subitem.view(buf_dtype))
 
         if i == buffer_n_elem - 1:
             nbytes = buffer_size - buffer_offsets[i]
