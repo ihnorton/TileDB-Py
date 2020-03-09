@@ -1,18 +1,18 @@
 .. image:: https://github.com/TileDB-Inc/TileDB/raw/dev/doc/source/_static/tiledb-logo_color_no_margin_@4x.png
-    :target: https://tiledb.com
-    :alt: TileDB logo
-    :width: 400
+  :target: https://tiledb.com
+  :alt: TileDB logo
+  :width: 400
 
 |
 
 .. image:: https://dev.azure.com/TileDB-Inc/CI/_apis/build/status/TileDB-Inc.TileDB-Py?branchName=dev
-    :target: https://dev.azure.com/TileDB-Inc/CI/_build?definitionId=1&_a=summary
-    :alt: Azure Pipelines Status
-.. image:: https://raw.githubusercontent.com/TileDB-Inc/TileDB/dev/doc/anaconda.svg
-    :alt: Anaconda icon
+  :target: https://dev.azure.com/TileDB-Inc/CI/_build?definitionId=1&_a=summary
+  :alt: Azure Pipelines Status
+.. image:: https://raw.githubusercontent.com/TileDB-Inc/TileDB/dev/doc/anaconda.svg?sanitize=true
+  :alt: Anaconda icon
 .. image:: https://anaconda.org/conda-forge/TileDB-Py/badges/downloads.svg
-    :target: https://anaconda.org/conda-forge/TileDB-Py
-    :alt: Anaconda TileDB-Py download count and package link
+  :target: https://anaconda.org/conda-forge/TileDB-Py
+  :alt: Anaconda TileDB-Py download count and package link
 
 TileDB-Py
 ---------
