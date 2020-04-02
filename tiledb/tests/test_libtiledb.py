@@ -1778,6 +1778,29 @@ class SparseArray(DiskTestCase):
                 np.column_stack([c1, c2])
             )
 
+    def test_sparse_mixed_domain_uint_float64(self):
+        path = self.path("mixed_domain_uint_float64")
+        ctx = tiledb.Ctx()
+        dims = [
+            tiledb.Dim(name="index", domain=(0, 501), tile=50, dtype=np.uint64),
+            tiledb.Dim(name="dpos", ctx=ctx, domain=(-100.0, 100.0), tile=10, dtype=np.float64)
+        ]
+        dom = tiledb.Domain(*dims)
+        attrs = [
+            tiledb.Attr(name="val", dtype=np.float64, ctx=ctx)
+        ]
+
+        schema = tiledb.ArraySchema(domain=dom, attrs=attrs, sparse=True, ctx=ctx)
+        tiledb.SparseArray.create(path, schema, ctx=ctx)
+
+        data = np.random.rand(500, 63)
+        coords1 = np.repeat(np.arange(0,500), 63)
+        coords2 = np.repeat(np.arange(0,63), 500)
+        #coords2 = np.linspace(-100.0,100.0,63)
+        #coords = np.meshgrid(coords1, coords2)
+
+        with tiledb.open(path, 'w') as A:
+            A[coords1, coords2] = data
 
 class DenseIndexing(DiskTestCase):
 
