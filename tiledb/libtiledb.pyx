@@ -1094,6 +1094,8 @@ cdef _numpy_dtype(tiledb_datatype_t tiledb_dtype, cell_size = 1):
             return np.uint16
         elif tiledb_dtype == TILEDB_CHAR:
             return np.dtype('S1')
+        elif tiledb_dtype == TILEDB_STRING_ASCII:
+            return np.bytes_
         elif tiledb_dtype == TILEDB_STRING_UTF8:
             return np.dtype('U1')
         elif _tiledb_type_is_datetime(tiledb_dtype):
@@ -2119,46 +2121,59 @@ cdef class Dim(object):
             ctx = default_ctx()
         if domain is None or len(domain) != 2:
             raise ValueError('invalid domain extent, must be a pair')
-        if dtype is not None:
-            dtype = np.dtype(dtype)
-            dtype_min, dtype_max = None, None
-            if np.issubdtype(dtype, np.integer):
-                info = np.iinfo(dtype)
-                dtype_min, dtype_max = info.min, info.max
-            elif np.issubdtype(dtype, np.floating):
-                info = np.finfo(dtype)
-                dtype_min, dtype_max = info.min, info.max
-            elif dtype.kind == 'M':
-                info = np.iinfo(np.int64)
-                date_unit = np.datetime_data(dtype)[0]
-                dtype_min = np.datetime64(info.min, date_unit)
-                dtype_max = np.datetime64(info.max, date_unit)
-            else:
-                raise TypeError("invalid Dim dtype {0!r}".format(dtype))
-            if (domain[0] < dtype_min or domain[0] > dtype_max or
-                    domain[1] < dtype_min or domain[1] > dtype_max):
-                raise TypeError(
-                    "invalid domain extent, domain cannot be safely cast to dtype {0!r}".format(dtype))
-        domain_array = np.asarray(domain, dtype=dtype)
-        domain_dtype = domain_array.dtype
-        # check that the domain type is a valid dtype (integer / floating)
-        if (not np.issubdtype(domain_dtype, np.integer) and
-                not np.issubdtype(domain_dtype, np.floating) and
-                not domain_dtype.kind == 'M'):
-            raise TypeError("invalid Dim dtype {0!r}".format(domain_dtype))
-        # if the tile extent is specified, cast
-        cdef void* tile_size_ptr = NULL
-        if tile is not None:
-            tile_size_array = _tiledb_cast_tile_extent(tile, domain_dtype)
-            if tile_size_array.size != 1:
-                raise ValueError("tile extent must be a scalar")
-            tile_size_ptr = np.PyArray_DATA(tile_size_array)
+
         # argument conversion
         cdef bytes bname = ustring(name).encode('UTF-8')
         cdef const char* name_ptr = PyBytes_AS_STRING(bname)
-        cdef tiledb_datatype_t dim_datatype = dtype_to_tiledb(domain_dtype)
-        cdef const void* domain_ptr = np.PyArray_DATA(domain_array)
+        cdef tiledb_datatype_t dim_datatype
+        cdef const void* domain_ptr = NULL
         cdef tiledb_dimension_t* dim_ptr = NULL
+        cdef void* tile_size_ptr = NULL
+        cdef np.dtype domain_dtype
+
+        if dtype is np.bytes_:
+            # Handle var-len domain type
+            #  (currently only TILEDB_STRING_ASCII)
+            # The dimension's domain is implicitly formed as
+            # coordinates are written.
+            dim_datatype = TILEDB_STRING_ASCII
+        else:
+            if dtype is not None:
+                dtype = np.dtype(dtype)
+                dtype_min, dtype_max = None, None
+                if np.issubdtype(dtype, np.integer):
+                    info = np.iinfo(dtype)
+                    dtype_min, dtype_max = info.min, info.max
+                elif np.issubdtype(dtype, np.floating):
+                    info = np.finfo(dtype)
+                    dtype_min, dtype_max = info.min, info.max
+                elif dtype.kind == 'M':
+                    info = np.iinfo(np.int64)
+                    date_unit = np.datetime_data(dtype)[0]
+                    dtype_min = np.datetime64(info.min, date_unit)
+                    dtype_max = np.datetime64(info.max, date_unit)
+                else:
+                    raise TypeError("invalid Dim dtype {0!r}".format(dtype))
+                if (domain[0] < dtype_min or domain[0] > dtype_max or
+                        domain[1] < dtype_min or domain[1] > dtype_max):
+                    raise TypeError(
+                        "invalid domain extent, domain cannot be safely cast to dtype {0!r}".format(dtype))
+            domain_array = np.asarray(domain, dtype=dtype)
+            domain_ptr = np.PyArray_DATA(domain_array)
+            domain_dtype = domain_array.dtype
+            dim_datatype = dtype_to_tiledb(domain_dtype)
+            # check that the domain type is a valid dtype (integer / floating)
+            if (not np.issubdtype(domain_dtype, np.integer) and
+                    not np.issubdtype(domain_dtype, np.floating) and
+                    not domain_dtype.kind == 'M'):
+                raise TypeError("invalid Dim dtype {0!r}".format(domain_dtype))
+            # if the tile extent is specified, cast
+            if tile is not None:
+                tile_size_array = _tiledb_cast_tile_extent(tile, domain_dtype)
+                if tile_size_array.size != 1:
+                    raise ValueError("tile extent must be a scalar")
+                tile_size_ptr = np.PyArray_DATA(tile_size_array)
+
         check_error(ctx,
                     tiledb_dimension_alloc(ctx.ptr,
                                            name_ptr,
@@ -2166,6 +2181,7 @@ cdef class Dim(object):
                                            domain_ptr,
                                            tile_size_ptr,
                                            &dim_ptr))
+
         assert(dim_ptr != NULL)
         self.ctx = ctx
         self.ptr = dim_ptr
