@@ -117,27 +117,32 @@ cdef dict execute_multi_index(Array array,
 
     # NOTE: query_ptr *must* only be freed in caller
 
-    cdef tiledb_ctx_t* ctx_ptr = array.ctx.ptr
-    cdef np.dtype coords_dtype
-    cdef unicode coord_name = (tiledb_coords()).decode('UTF-8')
-    cdef uint64_t attr_idx
-    cdef Attr attr
-    cdef bytes battr_name
-    cdef unicode attr_name
-    cdef np.dtype attr_dtype
-    cdef uint64_t result_bytes = 0
-    cdef size_t result_elements
-    cdef float result_elements_f, result_rem
-    cdef np.ndarray attr_array
-    cdef uint64_t el_count
-    cdef QueryAttr qattr
+    cdef:
+        tiledb_ctx_t* ctx_ptr = array.ctx.ptr
+        tiledb_query_status_t query_status
 
-    cdef uint64_t* buffer_sizes_ptr = NULL
+    cdef:
+        uint64_t result_bytes = 0
+        size_t result_elements
+        float result_elements_f, result_rem
+        uint64_t el_count = 0
+        bint repeat_query = True
+        uint64_t repeat_count = 0
+        uint64_t buffer_bytes_remaining = 0
+        uint64_t* buffer_sizes_ptr = NULL
 
-    cdef bint repeat_query = True
-    cdef tiledb_query_status_t query_status
-    cdef uint64_t repeat_count = 0
-    cdef uint64_t buffer_bytes_remaining = 0
+    cdef:
+        np.dtype coords_dtype
+        unicode coord_name = (tiledb_coords()).decode('UTF-8')
+
+    cdef:
+        Attr attr
+        uint64_t attr_idx
+        bytes battr_name
+        unicode attr_name
+        np.ndarray attr_array
+        np.dtype attr_dtype
+        QueryAttr qattr
 
     # Get the attributes
     cdef list attrs = [QueryAttr(a.name, a.dtype)
@@ -245,7 +250,7 @@ cdef dict execute_multi_index(Array array,
         elif query_status == TILEDB_FAILED:
             raise TileDBError("Query returned TILEDB_FAILED")
         elif query_status == TILEDB_INPROGRESS:
-            raise TileDBError("Query return TILEDB_INPROGRESS")
+            raise TileDBError("Query returned TILEDB_INPROGRESS")
         elif query_status == TILEDB_INCOMPLETE:
             raise TileDBError("Query returned TILEDB_INCOMPLETE")
         else:
