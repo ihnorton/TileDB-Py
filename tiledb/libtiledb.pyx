@@ -2224,6 +2224,17 @@ cdef class Dim(object):
         return name_ptr.decode('UTF-8', 'strict')
 
     @property
+    def isvar(self):
+        """True if the dimension is variable length
+
+        :rtype: bool
+        :raises: :py:exc:`tiledb.TileDBError`
+
+        """
+        cdef unsigned int ncells = self._cell_val_num()
+        return ncells == TILEDB_VAR_NUM
+
+    @property
     def isanon(self):
         """True if the dimension is anonymous
 
@@ -2232,6 +2243,15 @@ cdef class Dim(object):
         """
         name = self.name
         return name == u"" or name.startswith("__dim")
+
+    cdef unsigned int _cell_val_num(Dim self) except? 0:
+        cdef unsigned int ncells = 0
+        check_error(self.ctx,
+                    tiledb_dimension_get_cell_val_num(
+                        self.ctx.ptr,
+                        self.ptr,
+                        &ncells))
+        return ncells
 
     cdef _integer_domain(self):
         cdef tiledb_datatype_t typ = self._get_type()
@@ -2520,6 +2540,28 @@ cdef class Domain(object):
 
         assert(dim_ptr != NULL)
         return Dim.from_ptr(dim_ptr, self.ctx)
+
+    def has_dim(self, unicode name):
+        """
+        Returns true if the Domain has a Dimension with the given name
+
+        :param name: name of Dimension
+        :rtype: bool
+        :return:
+        """
+        cdef:
+            int32_t has_dim = 0
+            int32_t rc = TILEDB_OK
+            bytes bname = name.encode("UTF-8")
+
+        rc = tiledb_domain_has_dimension(
+            self.ctx.ptr,
+            self.ptr,
+            bname,
+            &has_dim
+        )
+        return bool(has_dim)
+
 
     def dump(self):
         """Dumps a string representation of the domain object to standard output (STDOUT)"""
@@ -2998,6 +3040,19 @@ cdef class ArraySchema(object):
         :raises TypeError: floating point (inexact) domain
         """
         return self.domain.shape
+
+    def _needs_var_buffer(self, unicode name):
+        """
+        Returns true if the given attribute or dimension is var-sized
+        :param name:
+        :rtype: bool
+        """
+        if self.has_attr(name):
+            return self.attr(name).isvar
+        elif self.domain.has_dim(name):
+            return self.domain.dim(name).isvar
+        else:
+            raise ValueError(f"Requested name '{name}' is not an attribute or dimension")
 
     cdef _attr_name(self, name):
         if name == "coords":

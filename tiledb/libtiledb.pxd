@@ -399,6 +399,12 @@ cdef extern from "tiledb/tiledb.h":
         const char* name,
         tiledb_dimension_t** dim)
 
+    int tiledb_domain_has_dimension(
+        tiledb_ctx_t * ctx,
+        const tiledb_domain_t* domain,
+        const char* name,
+        int32_t* has_dim)
+
     int tiledb_domain_dump(
         tiledb_ctx_t* ctx,
         const tiledb_domain_t* domain,
@@ -420,6 +426,11 @@ cdef extern from "tiledb/tiledb.h":
         tiledb_ctx_t* ctx,
         const tiledb_dimension_t* dim,
         const char** name)
+
+    int tiledb_dimension_get_cell_val_num(
+        tiledb_ctx_t* ctx,
+        const tiledb_dimension_t* dim,
+        uint32_t* cell_val_num)
 
     int tiledb_dimension_get_type(
         tiledb_ctx_t* ctx,
@@ -1083,6 +1094,7 @@ cdef class Dim(object):
     cdef from_ptr(const tiledb_dimension_t* ptr, Ctx ctx=*)
 
     cdef tiledb_datatype_t _get_type(Dim self) except? TILEDB_CHAR
+    cdef unsigned int _cell_val_num(Dim self) except? 0
     cdef _integer_domain(self)
     cdef _datetime_domain(self)
     cdef _shape(self)
