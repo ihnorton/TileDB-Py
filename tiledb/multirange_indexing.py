@@ -59,11 +59,6 @@ class MultiRangeIndexer(object):
     Implements multi-range / outer / orthogonal indexing.
 
     """
-    # for cython
-    # comment out for Python 2 :/
-    #array: Array
-    #schema: ArraySchema
-    #def __init__(self, array: Array, query = None):
 
     def __init__(self, array, query = None):
         if not issubclass(type(array), tiledb.Array):
