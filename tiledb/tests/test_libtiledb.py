@@ -421,6 +421,8 @@ class ArraySchemaTest(unittest.TestCase):
         self.assertEqual(schema.shape, (8, 8))
         self.assertEqual(schema.nattr, 1)
         self.assertEqual(schema.attr(0), a1)
+        self.assertTrue(schema.has_attr("val"))
+        self.assertFalse(schema.has_attr("nononoattr"))
         self.assertEqual(schema,
             tiledb.ArraySchema(ctx=ctx, domain=domain, attrs=(a1,)))
         self.assertNotEqual(schema,

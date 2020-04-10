@@ -3035,6 +3035,29 @@ cdef class ArraySchema(object):
         raise TypeError("attr indices must be a string name, "
                         "or an integer index, not {0!r}".format(type(key)))
 
+    def has_attr(self, unicode name):
+        """Returns true if the given name is an Attribute of the ArraySchema
+
+        :param name: attribute name
+        :rtype: boolean
+        """
+        cdef:
+            int32_t has_attr = 0
+            int32_t rc = TILEDB_OK
+            bytes bname = name.encode("UTF-8")
+
+        rc = tiledb_array_schema_has_attribute(
+            self.ctx.ptr,
+            self.ptr,
+            bname,
+            &has_attr
+        )
+        if rc != TILEDB_OK:
+            _raise_ctx_err(self.ctx.ptr, rc)
+
+        return bool(has_attr)
+
+
     def dump(self):
         """Dumps a string representation of the array object to standard output (stdout)"""
         check_error(self.ctx,

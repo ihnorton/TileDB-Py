@@ -450,6 +450,12 @@ cdef extern from "tiledb/tiledb.h":
         tiledb_array_schema_t* array_schema,
         tiledb_attribute_t* attr)
 
+    int tiledb_array_schema_has_attribute(
+        tiledb_ctx_t* ctx,
+        tiledb_array_schema_t* array_schema,
+        const char* name,
+        int32_t* has_attr)
+
     int tiledb_array_schema_set_domain(
         tiledb_ctx_t* ctx,
         tiledb_array_schema_t* array_schema,
