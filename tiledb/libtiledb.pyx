@@ -5,6 +5,7 @@
 from __future__ import absolute_import
 
 from cpython.version cimport PY_MAJOR_VERSION
+from cpython.pycapsule cimport PyCapsule_New, PyCapsule_IsValid, PyCapsule_GetPointer
 
 include "common.pxi"
 from .array import DenseArray, SparseArray
@@ -866,6 +867,14 @@ cdef class Ctx(object):
     def __dealloc__(self):
         if self.ptr != NULL:
             tiledb_ctx_free(&self.ptr)
+
+    def __capsule__(self):
+        if self.ptr == NULL:
+            raise TileDBError("internal error: cannot create capsule for uninitialized Ctx!")
+        print("ctx ptr cython: ", hex(<uint64_t>(self.ptr)))
+        cdef const char* name = "ctx"
+        cap = PyCapsule_New(<void *>(self.ptr), name, NULL)
+        return cap
 
     def __init__(self, config=None):
         cdef Config _config = Config()
@@ -3243,6 +3252,13 @@ cdef class Array(object):
         if self.ptr != NULL:
             tiledb_array_free(&self.ptr)
 
+    def __capsule__(self):
+        if self.ptr == NULL:
+            raise TileDBError("internal error: cannot create capsule for uninitialized Ctx!")
+        cdef const char* name = "ctx"
+        cap = PyCapsule_New(<void *>(self.ptr), name, NULL)
+        return cap
+
     def _ctx_(self) -> Ctx:
         """
         Get Ctx object associated with the array. This method
@@ -3712,7 +3728,12 @@ cdef class ReadQuery(object):
     @property
     def _offsets(self): return self._offsets
 
-    def __init__(self, Array array, np.ndarray subarray, list attr_names, tiledb_layout_t layout):
+    def __init__(self,
+                 Array array,
+                 np.ndarray subarray,
+                 list attr_names,
+                 tiledb_layout_t layout):
+
         self._buffers = dict()
         self._offsets = dict()
 

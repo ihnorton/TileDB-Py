@@ -27,51 +27,87 @@ namespace py = pybind11;
 
 namespace tiledbpy {
 
-struct RQ {
-    RQ() = default;
+class TileDBPyError : std::runtime_error {
+public:
+    explicit TileDBPyError(const char * m) : std::runtime_error(m) , message{m} {}
 
-    tiledb_ctx_t* ctx;
-    tiledb_array_t* array;
-    tiledb_query_t* query;
+    virtual const char * what() const noexcept override {return message.c_str();}
+private:
+    std::string message = "";
 };
-
-ReadQuery::ReadQuery() {
-    rq_ = unique_ptr<RQ>();
-};
-
-ReadQuery::ReadQuery(
-    py::capsule ctx_cap,
-    py::object array_cap,
-    py::tuple attrs,
-    bool include_coords) {
-
-}
 
 void ReadQuery::test(py::tuple ex) {
     for (auto o : ex) {
-        //std::cout << o << std::endl;
         py::print(o);
     }
+    throw TileDBPyError("foobar!");
 }
 
-void ReadQuery::set_ranges(py::tuple ranges) {
+ReadQuery::ReadQuery(
+    py::object ctx,
+    py::object array,
+    py::tuple attrs,
+    bool include_coords) {
+
+    ctx_ = (py::capsule)ctx.attr("__capsule__")();
+    array_ = (py::capsule)array.attr("__capsule__")();
+
+    query_ = nullptr;
+    auto rc = tiledb_query_alloc(ctx_, array_, TILEDB_READ, &query_);
+    if (rc != TILEDB_OK)
+        throw TileDBPyError("Failed to allocate query");
+
+    include_coords_ = include_coords;
+}
+
+struct RQBuffer {
+    string name;
+    vector<char> data;
+    vector<char> offsets;
+}
+
+void ReadQuery::submit() {
+    map<string, RQBuffer> buffers;
+
 
 }
+
+
+void ReadQuery::set_ranges(py::iterable ranges) {
+    // ranges are specified as one iterable per dimension
+
+    for (auto dim_range : ranges) {
+        py::print(dim_range);
+    }
+
+}
+
 
 PYBIND11_MODULE(readquery, m) {
     py::class_<ReadQuery>(m, "ReadQuery")
-        .def(py::init())
         .def(py::init<py::object, py::object, py::tuple, bool>())
+        .def("set_ranges", &ReadQuery::set_ranges)
+        .def("submit", &ReadQuery::submit)
         .def("test", &ReadQuery::test);
+
+    /*
+       we need to make sure C++ TileDBError is translated to a correctly-typed py error.
+       using py::exception(..., "TileDBError") creates a new exception
+       in the *readquery* module.
+    */
+    static auto tiledb_py_error = (py::object) py::module::import("tiledb").attr("TileDBError");
+
+    py::register_exception_translator([](std::exception_ptr p) {
+            try {
+                if (p) std::rethrow_exception(p);
+            } catch (const TileDBError &e) {
+                // TODO: set C++ line number if possible
+                PyErr_SetString(tiledb_py_error.ptr(), e.what());
+            }
+            catch (std::exception &e) {
+                std::cout << "got some other error" << e.what();
+            }
+        });
 }
 
 }; // namespace tiledbpy
-
-/*
-PYBIND11_MODULE(readquery, m) {
-    m.doc() = "pybind11 example plugin"; // optional module docstring
-
-    m.def("test", &tiledbpy::test, "a function that prints tuple");
-}
-*/
-
