@@ -8,7 +8,7 @@
 #include "numpy/arrayobject.h"
 #undef NPY_NO_DEPRECATED_API
 
-#define PY_ERROR_LOC(m) TileDBPyError(m, __FILE__, __LINE__);
+#define PY_ERROR_LOC(m) TileDBPyError(std::string(m) + "(" + std::string(__FILE__) + std::to_string(__LINE__) + std::string(")"));
 
 //#include <tiledb/tiledb> // C++
 //using namespace tiledb;
@@ -39,8 +39,8 @@ using namespace std;
 
 class TileDBPyError : std::runtime_error {
 public:
-    explicit TileDBPyError(const char * m) : std::runtime_error(m) , message{m} {}
-    explicit TileDBPyError(std::string m) : std::runtime_error(m.c_str()), message{m.c_str()} {}
+    explicit TileDBPyError(const char * m) : std::runtime_error(m) {}
+    explicit TileDBPyError(std::string m) : std::runtime_error(m.c_str()) {}
     explicit TileDBPyError(std::string m, const char *file, int line))
         : std::runtime_error(m.c_str())
         , message{m.c_str()} {}
