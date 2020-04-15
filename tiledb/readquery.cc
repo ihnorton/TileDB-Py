@@ -3,8 +3,11 @@
 #include <string>
 #include <iostream>
 
+#include "numpy/numpy.h"
 
-#include <tiledb/tiledb> // C++
+//#include <tiledb/tiledb> // C++
+//using namespace tiledb;
+
 #include <tiledb/tiledb.h> // C
 
 #include "readquery.h"
@@ -21,11 +24,11 @@ query requires
    not sure if size estimation works -- it should)
 */
 
-using namespace tiledb;
-using namespace std;
 namespace py = pybind11;
 
 namespace tiledbpy {
+
+using namespace std;
 
 class TileDBPyError : std::runtime_error {
 public:
@@ -34,6 +37,20 @@ public:
     virtual const char * what() const noexcept override {return message.c_str();}
 private:
     std::string message = "";
+};
+
+class NPyBuffer {
+    using DataPtr = unique_ptr<char*>;
+
+    NPyBuffer(size_t bytes) {
+        d_ = DataPtr(PyDataMem_New(bytes));
+    }
+
+    void realloc(size_t bytes) {}
+    void resize(size_t nelem) {}
+
+private:
+    std::unique_ptr<char*> d_;
 };
 
 void ReadQuery::test(py::tuple ex) {
@@ -60,15 +77,14 @@ ReadQuery::ReadQuery(
     include_coords_ = include_coords;
 }
 
-struct RQBuffer {
+struct AttrInfo {
     string name;
     vector<char> data;
     vector<char> offsets;
-}
+};
 
 void ReadQuery::submit() {
-    map<string, RQBuffer> buffers;
-
+    map<string, AttrInfo> buffers();
 
 }
 
@@ -91,9 +107,9 @@ PYBIND11_MODULE(readquery, m) {
         .def("test", &ReadQuery::test);
 
     /*
-       we need to make sure C++ TileDBError is translated to a correctly-typed py error.
-       using py::exception(..., "TileDBError") creates a new exception
-       in the *readquery* module.
+       We need to make sure C++ TileDBError is translated to a correctly-typed py error.
+       Note that using py::exception(..., "TileDBError") creates a new exception
+       in the *readquery* module, so we must import to reference.
     */
     static auto tiledb_py_error = (py::object) py::module::import("tiledb").attr("TileDBError");
 

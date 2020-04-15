@@ -16,7 +16,6 @@ class ReadQuery {
             py::object ctx_cap,
             py::object array_cap,
             py::tuple attrs,
-
             bool include_coords = false
         );
 
