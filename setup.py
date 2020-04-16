@@ -456,7 +456,9 @@ if not is_windows():
   CXXFLAGS.append("-std=c++11")
   if not TILEDB_DEBUG_BUILD:
     CXXFLAGS.append("-Wno-deprecated-declarations")
-
+  elif TILEDB_DEBUG_BUILD:
+    CXXFLAGS.append("-g")
+    CXXFLAGS.append("-O0")
 LFLAGS = os.environ.get("LFLAGS", "").split()
 
 # Allow setting (lib) TileDB directory if it is installed on the system

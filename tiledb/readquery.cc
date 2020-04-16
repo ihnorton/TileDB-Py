@@ -8,10 +8,9 @@
 #include "numpy/arrayobject.h"
 #undef NPY_NO_DEPRECATED_API
 
-#define PY_ERROR_LOC(m) TileDBPyError(std::string(m) + "(" + std::string(__FILE__) + std::to_string(__LINE__) + std::string(")"));
+#define TPY_ERROR_LOC(m) throw TileDBPyError(std::string(m) + " (" + __FILE__ + ":" + std::to_string(__LINE__) + ")");
 
-//#include <tiledb/tiledb> // C++
-//using namespace tiledb;
+#include <tiledb/tiledb> // C++
 
 #include <pybind11/pybind11.h>
 
@@ -31,24 +30,21 @@ query requires
    not sure if size estimation works -- it should)
 */
 
-namespace py = pybind11;
 
 namespace tiledbpy {
 
 using namespace std;
+using namespace tiledb;
+namespace py = pybind11;
 
 class TileDBPyError : std::runtime_error {
 public:
     explicit TileDBPyError(const char * m) : std::runtime_error(m) {}
     explicit TileDBPyError(std::string m) : std::runtime_error(m.c_str()) {}
-    explicit TileDBPyError(std::string m, const char *file, int line))
-        : std::runtime_error(m.c_str())
-        , message{m.c_str()} {}
-public:
-    virtual const char * what() const noexcept override {return message.c_str();}
 
-private:
-    std::string message = "";
+public:
+    virtual const char * what() const noexcept override {return std::runtime_error::what();}
+
 };
 
 class NPyBuffer {
@@ -121,9 +117,11 @@ class ReadQuery {
         void test(py::tuple x);
 */
 private:
-        tiledb_ctx_t* ctx_;
-        tiledb_array_t* array_;
-        tiledb_query_t* query_;
+        tiledb_ctx_t* c_ctx_;
+        tiledb_array_t* c_array_;
+        Context ctx_;
+        shared_ptr<tiledb::Array> array_;
+        shared_ptr<tiledb::Query> query_;
         std::vector<std::string> attrs;
         bool include_coords_;
 
@@ -136,8 +134,9 @@ public:
         for (auto o : ex) {
             py::print(o);
         }
-        throw TileDBPyError("foobar!");
     }
+
+    ReadQuery() = delete;
 
     ReadQuery(
         py::object ctx,
@@ -145,13 +144,18 @@ public:
         py::tuple attrs,
         bool include_coords) {
 
-        ctx_ = (py::capsule)ctx.attr("__capsule__")();
-        array_ = (py::capsule)array.attr("__capsule__")();
+        tiledb_ctx_t* c_ctx_ = (py::capsule)ctx.attr("__capsule__")();
+        if (c_ctx_ == nullptr)
+            TPY_ERROR_LOC("Invalid context pointer!")
+        ctx_ = Context(c_ctx_, false);
 
-        query_ = nullptr;
-        auto rc = tiledb_query_alloc(ctx_, array_, TILEDB_READ, &query_);
-        if (rc != TILEDB_OK)
-            throw TileDBPyError("Failed to allocate query");
+        tiledb_array_t* c_array_ = (py::capsule)array.attr("__capsule__")();
+
+        /* TBD whether we use the C++ API ... */
+        // we never own this pointer, pass own=false
+        array_ = std::shared_ptr<tiledb::Array>(new Array(ctx_, c_array_, false));
+
+        query_ = std::shared_ptr<tiledb::Query>(new Query(ctx_, *array_, TILEDB_READ));
 
         include_coords_ = include_coords;
     }
@@ -161,16 +165,131 @@ public:
         map<string, AttrInfo> buffers;
     }
 
+    /* Data conversion routines */
+
+    template <typename T>
+    void convert(py::object o, vector<char>& buf)
+    {
+        buf.resize(sizeof(T));
+        ((T*)static_cast<void*>(buf.data()))[0] = o.cast<T>();
+    }
+
+    template<>
+    void convert<std::string>(py::object o, vector<char>& buf)
+    {
+        auto str = o.cast<std::string>();
+        buf.resize(str.size());
+        memcpy(buf.data(), str.c_str(), str.size());
+    }
+
+    void convert(py::object o, vector<char>& buf){
+        if (py::isinstance<py::str>(o)) {
+            convert<std::string>(o, buf);
+        } else if (py::isinstance<py::float_>(o)) {
+            convert<double>(o, buf);
+        } else if (py::isinstance<py::int_>(o)) {
+
+        }
+    }
+
+    void convert_type(py::object o, vector<char>& buf, tiledb_datatype_t type) {
+        if (tiledb::impl::tiledb_string_type(type)) {
+            convert<string>(o, buf);
+        } else if (tiledb::impl::tiledb_datetime_type(type)) {
+            convert<int64_t>(o, buf);
+        } else if (type == TILEDB_FLOAT32) {
+            convert<float>(o, buf);
+        } else if (type == TILEDB_FLOAT64) {
+            convert<double>(o, buf);
+        }
+    }
+
     void add_dim_range(uint32_t dim_idx, py::tuple r) {
         if (py::len(r) == 0)
             return;
         else if (py::len(r) != 2)
-            throw PY_ERROR_LOC("Unexpected range len != 2");
+            TPY_ERROR_LOC("Unexpected range len != 2");
 
         auto r0 = r[0];
         auto r1 = r[1];
         if (r0.get_type() != r1.get_type())
-            throw TileDBPyError("Mismatched type");
+            TPY_ERROR_LOC("Mismatched type");
+
+        auto domain = array_->schema().domain();
+        auto dim = domain.dimension(dim_idx);
+        std::cout << dim << std::endl;
+
+        auto tiledb_type = dim.type();
+
+        /*
+        if (tiledb::impl::tiledb_string_type(tiledb_type)) {
+            auto r0_str = r0.cast<std::string>();
+            auto r1_str = r1.cast<std::string>();
+            query_->add_range(dim_idx, r0_str, r1_str);
+        } else {
+            convert_type(r0, dim_data_start, tiledb_type);
+            convert_type(r1, dim_data_start, tiledb_type);
+
+            query_->add_range(dim_idx, dim_data_start, dim_data_end);
+        }
+        */
+        try {
+        switch (tiledb_type) {
+            case TILEDB_INT32:
+            case TILEDB_INT64:
+            case TILEDB_INT8:
+            case TILEDB_UINT8: {
+                using T = uint8_t;
+                query_->add_range(dim_idx, r0.cast<T>(), r1.cast<T>());
+                }
+            case TILEDB_INT16: {
+                using T = int16_t;
+                query_->add_range(dim_idx, r0.cast<T>(), r1.cast<T>());
+                }
+            case TILEDB_UINT16: {
+                using T = uint16_t;
+                query_->add_range(dim_idx, r0.cast<T>(), r1.cast<T>());
+                }
+            case TILEDB_UINT32: {
+                using T = uint32_t;
+                query_->add_range(dim_idx, r0.cast<T>(), r1.cast<T>());
+                }
+            case TILEDB_UINT64:
+                query_->add_range(dim_idx, r0.cast<uint64_t>(), r1.cast<uint64_t>());
+            case TILEDB_FLOAT32:
+                query_->add_range(dim_idx, r0.cast<float>(), r1.cast<float>());
+            case TILEDB_FLOAT64:
+                query_->add_range(dim_idx, r0.cast<double>(), r1.cast<double>());
+            case TILEDB_STRING_ASCII:
+            case TILEDB_STRING_UTF8:
+            case TILEDB_CHAR:
+                if (!py::isinstance<py::str>(r0))
+                    TPY_ERROR_LOC("internal error: expected string type for var-length dim!");
+                query_->add_range(dim_idx, r0.cast<string>(), r1.cast<string>());
+            case TILEDB_DATETIME_YEAR:
+            case TILEDB_DATETIME_MONTH:
+            case TILEDB_DATETIME_WEEK:
+            case TILEDB_DATETIME_DAY:
+            case TILEDB_DATETIME_HR:
+            case TILEDB_DATETIME_MIN:
+            case TILEDB_DATETIME_SEC:
+            case TILEDB_DATETIME_MS:
+            case TILEDB_DATETIME_US:
+            case TILEDB_DATETIME_NS:
+            case TILEDB_DATETIME_PS:
+            case TILEDB_DATETIME_FS:
+            case TILEDB_DATETIME_AS:
+                TPY_ERROR_LOC("<TODO> datetime conversion unimplemented");
+            default:
+                TPY_ERROR_LOC("Unknown dim type conversion!");
+
+        }
+        } catch (py::cast_error &e) {
+            std::string msg = "Failed to cast dim range '" + (string)py::repr(r)
+                              + "' to dim type " + tiledb::impl::type_to_str(tiledb_type);
+            TPY_ERROR_LOC(msg);
+        }
+
 
     }
 
@@ -196,7 +315,7 @@ PYBIND11_MODULE(readquery, m) {
         .def(py::init<py::object, py::object, py::tuple, bool>())
         .def("set_ranges", &ReadQuery::set_ranges)
         .def("submit", &ReadQuery::submit)
-        .def("test", &ReadQuery::test);
+        .def("test_err", [](py::object self, std::string s) { throw TileDBPyError(s);} );
 
     /*
        We need to make sure C++ TileDBError is translated to a correctly-typed py error.
@@ -209,6 +328,9 @@ PYBIND11_MODULE(readquery, m) {
             try {
                 if (p) std::rethrow_exception(p);
             } catch (const TileDBPyError &e) {
+                // TODO: set C++ line number if possible
+                PyErr_SetString(tiledb_py_error.ptr(), e.what());
+            } catch (const tiledb::TileDBError &e) {
                 // TODO: set C++ line number if possible
                 PyErr_SetString(tiledb_py_error.ptr(), e.what());
             }

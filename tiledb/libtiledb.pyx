@@ -871,7 +871,6 @@ cdef class Ctx(object):
     def __capsule__(self):
         if self.ptr == NULL:
             raise TileDBError("internal error: cannot create capsule for uninitialized Ctx!")
-        print("ctx ptr cython: ", hex(<uint64_t>(self.ptr)))
         cdef const char* name = "ctx"
         cap = PyCapsule_New(<void *>(self.ptr), name, NULL)
         return cap
