@@ -1,6 +1,7 @@
 import unittest
 
 import tiledb
+import numpy as np
 from tiledb import TileDBError, readquery
 
 ctx = tiledb.default_ctx()
@@ -18,11 +19,14 @@ class BasicTest(unittest.TestCase):
             assert isinstance(exc, tiledb.TileDBError)
             assert exc.message == "foobar"
 
-        with self.assertRaises(TileDBError):
-            self.r.set_ranges([[(3, "a")]])
+        self.r.set_ranges([[(0, 3)]])
+        # error
+        #self.r.set_ranges([[(0, 3.0)]])
+
+        self.r.set_ranges([[(0, np.int32(3))]])
 
         with self.assertRaises(TileDBError):
-            self.r.set_ranges([[(0, 3)]])
+            self.r.set_ranges([[(3, "a")]])
 
         with self.assertRaisesRegex(
             TileDBError,
@@ -39,5 +43,5 @@ class BasicTest(unittest.TestCase):
         print("done")
 
 
-r2 = readquery.ReadQuery(ctx, a, (1,), False)
-BasicTest(r2).test()
+r = readquery.ReadQuery(ctx, a, (1,), False)
+BasicTest(r).test()

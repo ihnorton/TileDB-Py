@@ -153,9 +153,11 @@ public:
 
         /* TBD whether we use the C++ API ... */
         // we never own this pointer, pass own=false
-        array_ = std::shared_ptr<tiledb::Array>(new Array(ctx_, c_array_, false));
+        array_ = std::shared_ptr<tiledb::Array>(new Array(ctx_, c_array_, false),
+                    [](Array* p){} /* no deleter*/);
 
-        query_ = std::shared_ptr<tiledb::Query>(new Query(ctx_, *array_, TILEDB_READ));
+        query_ = std::shared_ptr<tiledb::Query>(new Query(ctx_, *array_, TILEDB_READ));//,
+//                     [](Query* p){} /* no deleter*/);
 
         include_coords_ = include_coords;
     }
@@ -212,12 +214,12 @@ public:
 
         auto r0 = r[0];
         auto r1 = r[1];
-        if (r0.get_type() != r1.get_type())
-            TPY_ERROR_LOC("Mismatched type");
+        // no type-check here, because we might allow cast-conversion
+        //if (r0.get_type() != r1.get_type())
+        //    TPY_ERROR_LOC("Mismatched type");
 
         auto domain = array_->schema().domain();
         auto dim = domain.dimension(dim_idx);
-        std::cout << dim << std::endl;
 
         auto tiledb_type = dim.type();
 
@@ -238,34 +240,56 @@ public:
             case TILEDB_INT32:
             case TILEDB_INT64:
             case TILEDB_INT8:
-            case TILEDB_UINT8: {
+            case TILEDB_UINT8:
+                {
                 using T = uint8_t;
                 query_->add_range(dim_idx, r0.cast<T>(), r1.cast<T>());
+                break;
                 }
-            case TILEDB_INT16: {
+            case TILEDB_INT16:
+                {
                 using T = int16_t;
                 query_->add_range(dim_idx, r0.cast<T>(), r1.cast<T>());
+                break;
                 }
             case TILEDB_UINT16: {
                 using T = uint16_t;
                 query_->add_range(dim_idx, r0.cast<T>(), r1.cast<T>());
+                break;
                 }
-            case TILEDB_UINT32: {
+            case TILEDB_UINT32:
+                {
                 using T = uint32_t;
                 query_->add_range(dim_idx, r0.cast<T>(), r1.cast<T>());
+                break;
                 }
             case TILEDB_UINT64:
-                query_->add_range(dim_idx, r0.cast<uint64_t>(), r1.cast<uint64_t>());
+                {
+                using T = uint64_t;
+                query_->add_range(dim_idx, r0.cast<T>(), r1.cast<T>());
+                break;
+                }
             case TILEDB_FLOAT32:
-                query_->add_range(dim_idx, r0.cast<float>(), r1.cast<float>());
+                {
+                using T = float;
+                query_->add_range(dim_idx, r0.cast<T>(), r1.cast<T>());
+                break;
+                }
             case TILEDB_FLOAT64:
-                query_->add_range(dim_idx, r0.cast<double>(), r1.cast<double>());
+                {
+                using T = double;
+                query_->add_range(dim_idx, r0.cast<T>(), r1.cast<T>());
+                break;
+                }
             case TILEDB_STRING_ASCII:
             case TILEDB_STRING_UTF8:
             case TILEDB_CHAR:
+                {
                 if (!py::isinstance<py::str>(r0))
                     TPY_ERROR_LOC("internal error: expected string type for var-length dim!");
                 query_->add_range(dim_idx, r0.cast<string>(), r1.cast<string>());
+                break;
+                }
             case TILEDB_DATETIME_YEAR:
             case TILEDB_DATETIME_MONTH:
             case TILEDB_DATETIME_WEEK:
@@ -289,8 +313,6 @@ public:
                               + "' to dim type " + tiledb::impl::type_to_str(tiledb_type);
             TPY_ERROR_LOC(msg);
         }
-
-
     }
 
     void set_ranges(py::iterable ranges) {
