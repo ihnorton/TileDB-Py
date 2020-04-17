@@ -78,7 +78,7 @@ cd tiledb/tests
 
 # copy build products out
 cp /home/tiledb/TileDB-Py27/wheelhouse/* /wheels
-cp /home/tiledb/TileDB-Py35/wheelhouse/* /wheels
-cp /home/tiledb/TileDB-Py36/wheelhouse/* /wheels
-cp /home/tiledb/TileDB-Py37/wheelhouse/* /wheels
+#cp /home/tiledb/TileDB-Py35/wheelhouse/* /wheels
+#cp /home/tiledb/TileDB-Py36/wheelhouse/* /wheels
+#cp /home/tiledb/TileDB-Py37/wheelhouse/* /wheels
 cp /home/tiledb/TileDB-Py38/wheelhouse/* /wheels
