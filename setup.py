@@ -226,16 +226,14 @@ def build_libtiledb(src_dir):
     subprocess.check_call(build_cmd, cwd=libtiledb_build_dir)
     subprocess.check_call(install_cmd, cwd=libtiledb_build_dir)
 
-    if not 'TILEDB_PATH' in os.environ:
-        os.environ['TILEDB_PATH'] = libtiledb_install_dir
     return libtiledb_install_dir
 
 
-def find_or_install_libtiledb(setuptools_cmd):
+def find_or_install_libtiledb(setuptools_cmd, wheel_build=False):
     """
     Find the TileDB library required for building the Cython extension. If not found,
     download, build and install TileDB, copying the resulting shared libraries
-    into a path where they will be found by package_data.
+    into a path where they will be found by package_data or the build process.
 
     :param setuptools_cmd: The setuptools command instance.
     """
@@ -245,50 +243,55 @@ def find_or_install_libtiledb(setuptools_cmd):
             tiledb_ext = ext
             break
 
+    from_source = getattr(tiledb_ext, 'tiledb_from_source', False)
+    lib_exists = libtiledb_exists(tiledb_ext.library_dirs)
+
     # Download, build and locally install TileDB if needed.
-    if hasattr(tiledb_ext, 'tiledb_from_source') or not libtiledb_exists(tiledb_ext.library_dirs):
+    if from_source or not lib_exists:
         src_dir = download_libtiledb()
-        install_dir = build_libtiledb(src_dir)
+        prefix_dir = build_libtiledb(src_dir)
+    elif hasattr(tiledb_ext, 'tiledb_path'):
+        prefix_dir = getattr(tiledb_ext, 'tiledb_path')
+
+    if from_source or wheel_build or not lib_exists:
         lib_subdir = 'bin' if os.name=='nt' else 'lib'
         native_subdir = '' if is_windows() else 'native'
         # Copy libtiledb shared object(s) to the package directory so they can be found
         # with package_data.
         dest_dir = os.path.join(TILEDB_PKG_DIR, native_subdir)
         for libname in libtiledb_library_names():
-            src = os.path.join(install_dir, lib_subdir, libname)
+            src = os.path.join(prefix_dir, lib_subdir, libname)
             if not os.path.exists(dest_dir):
                 os.makedirs(dest_dir)
             dest = os.path.join(dest_dir, libname)
             print("Copying file {0} to {1}".format(src, dest))
             shutil.copy(src, dest)
 
-        # TODO hack
-        # also copy the lib file for dependees
-        # this needs to come before
+        # Copy dependencies
         if is_windows():
             def do_copy(src, dest):
                 print("Copying file {0} to {1}".format(src, dest))
                 shutil.copy(src, dest)
 
             # lib files for linking
-            src = os.path.join(install_dir, "lib", "tiledb.lib")
+            src = os.path.join(prefix_dir, "lib", "tiledb.lib")
             dest = os.path.join(dest_dir, "tiledb.lib")
             do_copy(src, dest)
 
             # tbb
-            src = os.path.join(install_dir, "bin", "tbb.dll")
+            src = os.path.join(prefix_dir, "bin", "tbb.dll")
             dest = os.path.join(dest_dir, "tbb.dll")
             do_copy(src, dest)
-            src = os.path.join(install_dir, "lib", "tbb.lib")
+            src = os.path.join(prefix_dir, "lib", "tbb.lib")
             dest = os.path.join(dest_dir, "tbb.lib")
             do_copy(src, dest)
 
             #
-            tiledb_ext.library_dirs += [os.path.join(install_dir, "lib")]
+            tiledb_ext.library_dirs += [os.path.join(prefix_dir, "lib")]
 
         # Update the TileDB Extension instance with correct paths.
-        tiledb_ext.library_dirs += [os.path.join(install_dir, lib_subdir)]
-        tiledb_ext.include_dirs += [os.path.join(install_dir, "include")]
+        tiledb_ext.library_dirs += [os.path.join(prefix_dir, lib_subdir)]
+        tiledb_ext.include_dirs += [os.path.join(prefix_dir, "include")]
         # Update package_data so the shared object gets installed with the Python module.
         libtiledb_objects = [os.path.join(native_subdir, libname)
                              for libname in libtiledb_library_names()]
@@ -389,7 +392,7 @@ class LazyCommandClass(dict):
         class bdist_wheel_cmd(bdist_wheel):
             def run(self):
                 # This may modify package_data:
-                find_or_install_libtiledb(self)
+                find_or_install_libtiledb(self, wheel_build=True)
                 bdist_wheel.run(self)
 
         return bdist_wheel_cmd
@@ -565,6 +568,8 @@ if not is_windows():
 
 if TILEDB_PATH == 'source':
   ext_attr_update('tiledb_from_source', True)
+elif TILEDB_PATH != '':
+  ext_attr_update('tiledb_path', TILEDB_PATH)
 
 # This must always be set so the compile-time conditional has a value
 ext_attr_update('cython_compile_time_env', {'TILEDBPY_MODULAR': TILEDBPY_MODULAR})
