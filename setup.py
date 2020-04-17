@@ -439,7 +439,8 @@ def setup_requires():
            numpy_required_version,
            'setuptools>=18.0',
            'setuptools_scm>=1.5.4',
-           'wheel>=0.30']
+           'wheel>=0.30',
+           'pybind11']
     # Add cmake requirement if libtiledb is not found and cmake is not available.
     if not libtiledb_exists(LIB_DIRS) and not cmake_available():
         req.append('cmake>=3.11.0')
