@@ -167,45 +167,6 @@ public:
         map<string, AttrInfo> buffers;
     }
 
-    /* Data conversion routines */
-
-    template <typename T>
-    void convert(py::object o, vector<char>& buf)
-    {
-        buf.resize(sizeof(T));
-        ((T*)static_cast<void*>(buf.data()))[0] = o.cast<T>();
-    }
-
-    template<>
-    void convert<std::string>(py::object o, vector<char>& buf)
-    {
-        auto str = o.cast<std::string>();
-        buf.resize(str.size());
-        memcpy(buf.data(), str.c_str(), str.size());
-    }
-
-    void convert(py::object o, vector<char>& buf){
-        if (py::isinstance<py::str>(o)) {
-            convert<std::string>(o, buf);
-        } else if (py::isinstance<py::float_>(o)) {
-            convert<double>(o, buf);
-        } else if (py::isinstance<py::int_>(o)) {
-            TPY_ERROR_LOC("<TODO> unimplemented")
-        }
-    }
-
-    void convert_type(py::object o, vector<char>& buf, tiledb_datatype_t type) {
-        if (tiledb::impl::tiledb_string_type(type)) {
-            convert<string>(o, buf);
-        } else if (tiledb::impl::tiledb_datetime_type(type)) {
-            convert<int64_t>(o, buf);
-        } else if (type == TILEDB_FLOAT32) {
-            convert<float>(o, buf);
-        } else if (type == TILEDB_FLOAT64) {
-            convert<double>(o, buf);
-        }
-    }
-
     void add_dim_range(uint32_t dim_idx, py::tuple r) {
         if (py::len(r) == 0)
             return;
