@@ -43,5 +43,5 @@ class BasicTest(unittest.TestCase):
         print("done")
 
 
-r = core.ReadQuery(ctx, a, (1,), False)
+r = core.PyQuery(ctx, a, (1,), False)
 BasicTest(r).test()

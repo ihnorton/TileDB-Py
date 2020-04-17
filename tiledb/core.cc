@@ -101,10 +101,10 @@ struct AttrInfo {
     vector<char> offsets;
 };
 
-class ReadQuery {
+class PyQuery {
 /*
     public:
-        ReadQuery(
+        PyQuery(
             py::object ctx_cap,
             py::object array_cap,
             py::tuple attrs,
@@ -136,9 +136,9 @@ public:
         }
     }
 
-    ReadQuery() = delete;
+    PyQuery() = delete;
 
-    ReadQuery(
+    PyQuery(
         py::object ctx,
         py::object array,
         py::tuple attrs,
@@ -238,8 +238,23 @@ public:
         try {
         switch (tiledb_type) {
             case TILEDB_INT32:
+                {
+                using T = int32_t;
+                query_->add_range(dim_idx, r0.cast<T>(), r1.cast<T>());
+                break;
+                }
             case TILEDB_INT64:
+                {
+                using T = int64_t;
+                query_->add_range(dim_idx, r0.cast<T>(), r1.cast<T>());
+                break;
+                }
             case TILEDB_INT8:
+                {
+                using T = uint8_t;
+                query_->add_range(dim_idx, r0.cast<T>(), r1.cast<T>());
+                break;
+                }
             case TILEDB_UINT8:
                 {
                 using T = uint8_t;
@@ -333,10 +348,10 @@ public:
 
 
 PYBIND11_MODULE(core, m) {
-    py::class_<ReadQuery>(m, "ReadQuery")
+    py::class_<PyQuery>(m, "PyQuery")
         .def(py::init<py::object, py::object, py::tuple, bool>())
-        .def("set_ranges", &ReadQuery::set_ranges)
-        .def("submit", &ReadQuery::submit)
+        .def("set_ranges", &PyQuery::set_ranges)
+        .def("submit", &PyQuery::submit)
         .def("test_err", [](py::object self, std::string s) { throw TileDBPyError(s);} );
 
     /*
