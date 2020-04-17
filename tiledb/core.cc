@@ -190,7 +190,7 @@ public:
         } else if (py::isinstance<py::float_>(o)) {
             convert<double>(o, buf);
         } else if (py::isinstance<py::int_>(o)) {
-
+            TPY_ERROR_LOC("<TODO> unimplemented")
         }
     }
 
