@@ -332,7 +332,7 @@ public:
 };
 
 
-PYBIND11_MODULE(readquery, m) {
+PYBIND11_MODULE(core, m) {
     py::class_<ReadQuery>(m, "ReadQuery")
         .def(py::init<py::object, py::object, py::tuple, bool>())
         .def("set_ranges", &ReadQuery::set_ranges)

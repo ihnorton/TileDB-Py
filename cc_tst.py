@@ -2,7 +2,7 @@ import unittest
 
 import tiledb
 import numpy as np
-from tiledb import TileDBError, readquery
+from tiledb import TileDBError, core
 
 ctx = tiledb.default_ctx()
 a = tiledb.open("/tmp/axxxa1")
@@ -43,5 +43,5 @@ class BasicTest(unittest.TestCase):
         print("done")
 
 
-r = readquery.ReadQuery(ctx, a, (1,), False)
+r = core.ReadQuery(ctx, a, (1,), False)
 BasicTest(r).test()

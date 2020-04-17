@@ -529,8 +529,8 @@ __extensions = [
     language="c++"
     ),
   Extension(
-    "tiledb.readquery",
-    ["tiledb/readquery.cc"],
+    "tiledb.core",
+    ["tiledb/core.cc"],
     include_dirs = [
         *INC_DIRS,
         get_pybind_include(),
