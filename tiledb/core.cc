@@ -13,6 +13,7 @@
 #include <tiledb/tiledb> // C++
 
 #include <pybind11/pybind11.h>
+#include <pybind11/numpy.h>
 
 #include <tiledb/tiledb.h> // C
 
@@ -45,54 +46,6 @@ public:
 public:
     virtual const char * what() const noexcept override {return std::runtime_error::what();}
 
-};
-
-class NPyBuffer {
-
-    NPyBuffer(size_t bytes, size_t itemsize=1) :
-        bytes_(bytes), itemsize_(itemsize), own_(true) {
-
-        d_ = (char*)PyDataMem_NEW(bytes);
-        if (d_ == nullptr)
-            throw TileDBPyError(string("Failed to allocate NumPy buffer size: ") + std::to_string(bytes));
-
-    }
-
-    const char* data() {
-        return d_;
-    }
-
-    const char* take() {
-        own_ = false;
-        return d_;
-    }
-
-    void realloc(size_t bytes) {
-        const char* d_new = (char*)PyDataMem_RENEW(d_, bytes);
-        if (d_new == nullptr)
-            throw TileDBPyError(string("Failed to allocate NumPy buffer size: ") + std::to_string(bytes));
-        d_ = (char*)d_new;
-        bytes_ = bytes;
-    }
-
-    void resize(size_t nelem) {
-        size_t new_bytes = itemsize_ * nelem;
-        this->realloc(new_bytes);
-    }
-
-    void dealloc() {
-        if (!own_)
-            return;
-
-        assert(d_);
-        PyDataMem_FREE(d_);
-    }
-
-private:
-    char* d_;
-    size_t bytes_;
-    size_t itemsize_;
-    bool own_;
 };
 
 struct AttrInfo {
@@ -130,12 +83,6 @@ private:
         std::vector<char> dim_data_end;
 
 public:
-    void test(py::tuple ex) {
-        for (auto o : ex) {
-            py::print(o);
-        }
-    }
-
     PyQuery() = delete;
 
     PyQuery(
@@ -160,11 +107,6 @@ public:
 //                     [](Query* p){} /* no deleter*/);
 
         include_coords_ = include_coords;
-    }
-
-
-    void submit() {
-        map<string, AttrInfo> buffers;
     }
 
     void add_dim_range(uint32_t dim_idx, py::tuple r) {
@@ -305,6 +247,71 @@ public:
         }
 
     }
+
+    void set_attr_buffer(std::string name, py::object data)
+    {}
+
+    bool is_var(std::string name) {
+        auto domain = array_->schema().domain();
+        if (domain.has_dimension(name)) {
+            auto dim = domain.dimension(name);
+            return dim.cell_val_num() == TILEDB_VAR_NUM;
+        } else if (array_->schema().has_attribute(name)) {
+            auto attr = array_->schema().attribute(name);
+            return attr.cell_val_num() == TILEDB_VAR_NUM;
+        }
+    }
+
+    void set_buffer(py::str name, py::object data) {
+        auto dim = false;
+        // set input data for an attribute or dimension buffer
+        if (array_->schema().domain().has_dimension(name))
+            set_buffer(name, data);
+        else if (array_->schema().has_attribute(name))
+            set_buffer(name, data);
+        else
+            TPY_ERROR_LOC("Unknown attr or dim '" + (string)name +"'")
+    }
+
+    void alloc_buffer(std::string name) {
+        if (is_var(name)) {
+
+        }
+    }
+
+    void submit_read() {
+        map<string, AttrInfo> buffers;
+
+        auto issparse = array_->schema().array_type() == TILEDB_SPARSE;
+        auto need_dim_buffers = include_coords_ || issparse;
+
+        if (need_dim_buffers) {
+            auto domain = array_->schema().domain();
+            for (auto dim : domain.dimensions()) {
+
+            }
+        }
+
+    }
+
+    void submit_write() {}
+
+    void submit() {
+        if (array_->query_type() == TILEDB_READ)
+            submit_read();
+        else if (array_->query_type() == TILEDB_WRITE)
+            submit_write();
+         else
+            TPY_ERROR_LOC("Unknown query type!")
+    }
+
+    py::array test_array() {
+        py::array_t<uint8_t> a;
+        a.resize({10});
+
+        a.resize({20});
+        return std::move(a);
+    }
 };
 
 
@@ -312,7 +319,9 @@ PYBIND11_MODULE(core, m) {
     py::class_<PyQuery>(m, "PyQuery")
         .def(py::init<py::object, py::object, py::tuple, bool>())
         .def("set_ranges", &PyQuery::set_ranges)
+        .def("set_buffer", &PyQuery::set_buffer)
         .def("submit", &PyQuery::submit)
+        .def("test_array", &PyQuery::test_array)
         .def("test_err", [](py::object self, std::string s) { throw TileDBPyError(s);} );
 
     /*
