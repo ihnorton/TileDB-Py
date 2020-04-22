@@ -49,26 +49,76 @@ public:
 };
 
 struct AttrInfo {
+
+    AttrInfo(std::string name, tiledb_datatype_t type, size_t elem_bytes, size_t offsets_num) :
+        name(name), type(type)
+    {
+        data = py::array()
+    }
+
     string name;
-    vector<char> data;
-    vector<char> offsets;
+    tiledb_datatype_t type;
+    py::array data;
+    vector<uint32_t> offsets;
 };
 
+py::dtype tiledb_dtype(tiledb_datatype_t type) {
+    switch (type) {
+        case TILEDB_INT32:
+            return py::dtype("int32");
+        case TILEDB_INT64:
+            return py::dtype("int64");
+        case TILEDB_FLOAT32:
+            return py::dtype("float32");
+        case TILEDB_FLOAT64:
+            return py::dtype("float64");
+        case TILEDB_INT8:
+            return py::dtype("int8");
+        case TILEDB_UINT8:
+            retury py::dtype("uint8");
+        case TILEDB_INT16:
+            return py::dtype("int16");
+        case TILEDB_UINT16:
+            return py::dtype("uint16");
+        case TILEDB_UINT32:
+            return py::dtype("uint32");
+        case TILEDB_UINT64:
+            return py::dtype("uint64");
+        case TILEDB_STRING_ASCII:
+            return py::dtype("S1");
+        case TILEDB_STRING_UTF8:
+            return py::dtype("U1");
+        case TILEDB_STRING_UTF16:
+        case TILEDB_STRING_UTF32:
+            TPY_ERROR_LOC("Unimplemented UTF16 or UTF32 string conversion!");
+        case TILEDB_STRING_UCS2:
+        case TILEDB_STRING_UCS4:
+            TPY_ERROR_LOC("Unimplemented UCS2 or UCS4 string conversion!");
+        case TILEDB_CHAR:
+            return py::dtype("S1");
+        case TILEDB_ANY:
+            TPY_ERROR_LOC("Unimplemented TILEDB_ANY conversion!"); // <TODO>
+        case TILEDB_DATETIME_YEAR:
+        case TILEDB_DATETIME_MONTH:
+        case TILEDB_DATETIME_WEEK:
+        case TILEDB_DATETIME_DAY:
+        case TILEDB_DATETIME_HR:
+        case TILEDB_DATETIME_MIN:
+        case TILEDB_DATETIME_SEC:
+        case TILEDB_DATETIME_MS:
+        case TILEDB_DATETIME_US:
+        case TILEDB_DATETIME_NS:
+        case TILEDB_DATETIME_PS:
+        case TILEDB_DATETIME_FS:
+        case TILEDB_DATETIME_AS:
+            TPY_ERROR_LOC("Unimplemented datetime conversion!"); // <TODO>
+    }
+
+
+}
+
 class PyQuery {
-/*
-    public:
-        PyQuery(
-            py::object ctx_cap,
-            py::object array_cap,
-            py::tuple attrs,
-            bool include_coords = false
-        );
 
-        void submit();
-        void set_ranges(py::iterable ranges);
-
-        void test(py::tuple x);
-*/
 private:
         tiledb_ctx_t* c_ctx_;
         tiledb_array_t* c_array_;
@@ -76,11 +126,9 @@ private:
         shared_ptr<tiledb::Array> array_;
         shared_ptr<tiledb::Query> query_;
         std::vector<std::string> attrs;
-        bool include_coords_;
+        map<string, BufferInfo> buffers_;
 
-        // dim data scratch space
-        std::vector<char> dim_data_start;
-        std::vector<char> dim_data_end;
+        bool include_coords_;
 
 public:
     PyQuery() = delete;
@@ -259,6 +307,8 @@ public:
         } else if (array_->schema().has_attribute(name)) {
             auto attr = array_->schema().attribute(name);
             return attr.cell_val_num() == TILEDB_VAR_NUM;
+        } else {
+            TPY_ERROR_LOC("Unknown buffer type for is_var check (expected attribute or dimension)")
         }
     }
 
@@ -273,25 +323,38 @@ public:
             TPY_ERROR_LOC("Unknown attr or dim '" + (string)name +"'")
     }
 
-    void alloc_buffer(std::string name) {
+    void alloc_buffer(std::string name, tiledb_datatype_t type) {
+        uint64_t buf_bytes = 0;
+        uint64_t offsets_num = 0;
         if (is_var(name)) {
-
+            auto size_pair = est_result_size_var(name);
+            buf_bytes = size_pair.second;
+            offsets_num = size_pair.first;
+        } else {
+            buf_bytes = query_->est_result_size(name);
         }
+        buffers_.insert(
+            {name, AttrInfo(name, type, buf_bytes, offsets_num)}
+        );
     }
 
     void submit_read() {
-        map<string, AttrInfo> buffers;
-
-        auto issparse = array_->schema().array_type() == TILEDB_SPARSE;
+        auto schema = array_->schema();
+        auto issparse = schema.array_type() == TILEDB_SPARSE;
         auto need_dim_buffers = include_coords_ || issparse;
 
         if (need_dim_buffers) {
-            auto domain = array_->schema().domain();
+            auto domain = schema.domain();
             for (auto dim : domain.dimensions()) {
-
+                alloc_buffer(dim.name(), dim.type());
             }
         }
 
+        for (auto attr_pair : schema.attributes()) {
+            alloc_buffer(attr_pair.first, attr_pair.second.type());
+        }
+
+        query_->submit();
     }
 
     void submit_write() {}
