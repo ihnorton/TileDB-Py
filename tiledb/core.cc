@@ -48,12 +48,13 @@ public:
 
 };
 
-struct AttrInfo {
+struct BufferInfo {
 
-    AttrInfo(std::string name, tiledb_datatype_t type, size_t elem_bytes, size_t offsets_num) :
+    BufferInfo(std::string name, tiledb_datatype_t type, size_t elem_bytes, size_t offsets_num) :
         name(name), type(type)
     {
-        data = py::array()
+        py::dtype dtype = tiledb_dtype(type);
+        data = py::array(dtype, elem_bytes / dtype.itemsize());
     }
 
     string name;
@@ -75,7 +76,7 @@ py::dtype tiledb_dtype(tiledb_datatype_t type) {
         case TILEDB_INT8:
             return py::dtype("int8");
         case TILEDB_UINT8:
-            retury py::dtype("uint8");
+            return py::dtype("uint8");
         case TILEDB_INT16:
             return py::dtype("int16");
         case TILEDB_UINT16:
@@ -113,8 +114,6 @@ py::dtype tiledb_dtype(tiledb_datatype_t type) {
         case TILEDB_DATETIME_AS:
             TPY_ERROR_LOC("Unimplemented datetime conversion!"); // <TODO>
     }
-
-
 }
 
 class PyQuery {
@@ -127,7 +126,6 @@ private:
         shared_ptr<tiledb::Query> query_;
         std::vector<std::string> attrs;
         map<string, BufferInfo> buffers_;
-
         bool include_coords_;
 
 public:
@@ -313,7 +311,6 @@ public:
     }
 
     void set_buffer(py::str name, py::object data) {
-        auto dim = false;
         // set input data for an attribute or dimension buffer
         if (array_->schema().domain().has_dimension(name))
             set_buffer(name, data);
@@ -327,14 +324,14 @@ public:
         uint64_t buf_bytes = 0;
         uint64_t offsets_num = 0;
         if (is_var(name)) {
-            auto size_pair = est_result_size_var(name);
+            auto size_pair = query_->est_result_size_var(name);
             buf_bytes = size_pair.second;
             offsets_num = size_pair.first;
         } else {
             buf_bytes = query_->est_result_size(name);
         }
         buffers_.insert(
-            {name, AttrInfo(name, type, buf_bytes, offsets_num)}
+            {name, BufferInfo(name, type, buf_bytes, offsets_num)}
         );
     }
 
