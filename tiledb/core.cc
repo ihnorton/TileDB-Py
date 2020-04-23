@@ -48,19 +48,25 @@ public:
 
 };
 
+py::dtype tiledb_dtype(tiledb_datatype_t type);
+
 struct BufferInfo {
 
     BufferInfo(std::string name, tiledb_datatype_t type, size_t elem_bytes, size_t offsets_num) :
         name(name), type(type)
     {
+        isvar = (offsets_num > 0);
         py::dtype dtype = tiledb_dtype(type);
         data = py::array(dtype, elem_bytes / dtype.itemsize());
+        offsets = std::vector<uint64_t>(offsets_num);
     }
+
 
     string name;
     tiledb_datatype_t type;
     py::array data;
-    vector<uint32_t> offsets;
+    vector<uint64_t> offsets;
+    bool isvar;
 };
 
 py::dtype tiledb_dtype(tiledb_datatype_t type) {
@@ -119,15 +125,16 @@ py::dtype tiledb_dtype(tiledb_datatype_t type) {
 class PyQuery {
 
 private:
-        tiledb_ctx_t* c_ctx_;
-        tiledb_array_t* c_array_;
+
         Context ctx_;
         shared_ptr<tiledb::Array> array_;
         shared_ptr<tiledb::Query> query_;
         std::vector<std::string> attrs;
         map<string, BufferInfo> buffers_;
         bool include_coords_;
-
+public:
+        tiledb_ctx_t* c_ctx_;
+        tiledb_array_t* c_array_;
 public:
     PyQuery() = delete;
 
@@ -172,18 +179,6 @@ public:
 
         auto tiledb_type = dim.type();
 
-        /*
-        if (tiledb::impl::tiledb_string_type(tiledb_type)) {
-            auto r0_str = r0.cast<std::string>();
-            auto r1_str = r1.cast<std::string>();
-            query_->add_range(dim_idx, r0_str, r1_str);
-        } else {
-            convert_type(r0, dim_data_start, tiledb_type);
-            convert_type(r1, dim_data_start, tiledb_type);
-
-            query_->add_range(dim_idx, dim_data_start, dim_data_end);
-        }
-        */
         try {
         switch (tiledb_type) {
             case TILEDB_INT32:
@@ -335,6 +330,21 @@ public:
         );
     }
 
+    void set_buffers() {
+        for (auto bp : buffers_) {
+            auto name = bp.first;
+            auto b = bp.second;
+            if (b.isvar) {
+                query_->set_buffer(b.name, b.offsets.data(), b.offsets.size(),
+                                   (void*)b.data.data(), b.data.size());
+            } else {
+                query_->set_buffer(b.name, (void*)b.data.data(), b.data.size());
+            }
+
+        }
+
+    }
+
     void submit_read() {
         auto schema = array_->schema();
         auto issparse = schema.array_type() == TILEDB_SPARSE;
@@ -351,7 +361,27 @@ public:
             alloc_buffer(attr_pair.first, attr_pair.second.type());
         }
 
+        set_buffers();
+
+        size_t max_retries = 0, retries = 0;
+        try {
+            max_retries = std::atoi(ctx_.config().get("py.max_incomplete_retries").c_str());
+        } catch (tiledb::TileDBError& e) {
+            max_retries = 100;
+        }
+
+        {
+        py::gil_scoped_release release;
         query_->submit();
+        }
+
+        while (query_->query_status() == Query::Status::INCOMPLETE) {
+            if (retries > max_retries)
+                TPY_ERROR_LOC("Exceeded maximum retries ('py.max_incomplete_retries': "
+                              + std::to_string(max_retries) + "')");
+
+            TPY_ERROR_LOC("UNIMPLEMENTED"); // <TODO>
+        }
     }
 
     void submit_write() {}
@@ -365,6 +395,14 @@ public:
             TPY_ERROR_LOC("Unknown query type!")
     }
 
+    py::dict results() {
+        py::dict results;
+        for (auto &bp : buffers_) {
+            py::print(bp.second.data);
+        }
+        return results;
+    }
+
     py::array test_array() {
         py::array_t<uint8_t> a;
         a.resize({10});
@@ -374,6 +412,8 @@ public:
     }
 };
 
+//#include "core_test.h"
+//init_test(py::module&);
 
 PYBIND11_MODULE(core, m) {
     py::class_<PyQuery>(m, "PyQuery")
@@ -381,6 +421,7 @@ PYBIND11_MODULE(core, m) {
         .def("set_ranges", &PyQuery::set_ranges)
         .def("set_buffer", &PyQuery::set_buffer)
         .def("submit", &PyQuery::submit)
+        .def("results", &PyQuery::results)
         .def("test_array", &PyQuery::test_array)
         .def("test_err", [](py::object self, std::string s) { throw TileDBPyError(s);} );
 

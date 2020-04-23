@@ -1,12 +1,15 @@
-import unittest
+import unittest, os
 
 import tiledb
 import numpy as np
 from tiledb import TileDBError, core
 
-ctx = tiledb.default_ctx()
-a = tiledb.open("/tmp/axxxa1")
+uri = "/tmp/axxxa1"
 
+ctx = tiledb.default_ctx()
+
+if not os.path.isdir(uri):
+    tiledb.from_numpy(uri, np.random.rand(4))
 
 class BasicTest(unittest.TestCase):
     def __init__(self, r):
@@ -20,8 +23,9 @@ class BasicTest(unittest.TestCase):
             assert exc.message == "foobar"
 
         self.r.set_ranges([[(0, 3)]])
-        # error
-        #self.r.set_ranges([[(0, 3.0)]])
+
+        with self.assertRaises(TileDBError):
+            self.r.set_ranges([[(0, 3.0)]])
 
         self.r.set_ranges([[(0, np.int32(3))]])
 
@@ -43,5 +47,6 @@ class BasicTest(unittest.TestCase):
         print("done")
 
 
+a = tiledb.open(uri)
 r = core.PyQuery(ctx, a, (1,), False)
 BasicTest(r).test()
