@@ -66,6 +66,8 @@ struct BufferInfo {
     tiledb_datatype_t type;
     py::array data;
     py::array_t<uint64_t> offsets;
+    uint64_t data_read = 0;
+    uint64_t offsets_read = 0;
     bool isvar;
 };
 
@@ -129,7 +131,7 @@ private:
         Context ctx_;
         shared_ptr<tiledb::Array> array_;
         shared_ptr<tiledb::Query> query_;
-        std::vector<std::string> attrs;
+        std::vector<std::string> attrs_;
         map<string, BufferInfo> buffers_;
         bool include_coords_;
 public:
@@ -161,7 +163,9 @@ public:
 
         include_coords_ = include_coords;
 
-        attrs_ = attrs.cast<std::vector<std::string>>;
+        for (auto a : attrs) {
+            attrs_.push_back(a.cast<string>());
+        }
     }
 
     void add_dim_range(uint32_t dim_idx, py::tuple r) {
@@ -337,7 +341,7 @@ public:
             auto name = bp.first;
             auto b = bp.second;
             if (b.isvar) {
-                query_->set_buffer(b.name, b.offsets.data(), b.offsets.size(),
+                query_->set_buffer(b.name, (uint64_t*)b.offsets.data(), b.offsets.size(),
                                    (void*)b.data.data(), b.data.size());
             } else {
                 query_->set_buffer(b.name, (void*)b.data.data(), b.data.size());
@@ -400,7 +404,7 @@ public:
     py::dict results() {
         py::dict results;
         for (auto &bp : buffers_) {
-            results[bp.first] = py::tuple(bp.second.data, bp.second)
+            results[py::str(bp.first)] = py::make_tuple(bp.second.data, bp.second.offsets);
         }
         return results;
     }
@@ -413,9 +417,6 @@ public:
         return std::move(a);
     }
 };
-
-//#include "core_test.h"
-//init_test(py::module&);
 
 PYBIND11_MODULE(core, m) {
     py::class_<PyQuery>(m, "PyQuery")
