@@ -12,10 +12,13 @@ if not os.path.isdir(uri):
     tiledb.from_numpy(uri, np.random.rand(4))
 
 class BasicTest(unittest.TestCase):
-    def __init__(self, r):
-        self.r = r
+    def __init__(self):
+        pass
 
     def test(self):
+        a = tiledb.open(uri)
+        self.r = core.PyQuery(ctx, a, ("",), False)
+
         try:
             self.r.test_err("foobar")
         except Exception as exc:
@@ -46,7 +49,16 @@ class BasicTest(unittest.TestCase):
 
         print("done")
 
+    def test_read(self):
+        a = tiledb.open(uri)
+        q = core.PyQuery(ctx, a, ("",), False)
+
+        q.set_ranges([[(0,3)]])
+        q.submit()
+        self.assertEqual(q.results()[''], a[:])
+
+
+BasicTest().test()
 
 a = tiledb.open(uri)
-r = core.PyQuery(ctx, a, (1,), False)
-BasicTest(r).test()
+r = core.PyQuery(ctx, a, ("",), False)

@@ -58,14 +58,14 @@ struct BufferInfo {
         isvar = (offsets_num > 0);
         py::dtype dtype = tiledb_dtype(type);
         data = py::array(dtype, elem_bytes / dtype.itemsize());
-        offsets = std::vector<uint64_t>(offsets_num);
+        offsets = py::array_t<uint64_t>(offsets_num);
     }
 
 
     string name;
     tiledb_datatype_t type;
     py::array data;
-    vector<uint64_t> offsets;
+    py::array_t<uint64_t> offsets;
     bool isvar;
 };
 
@@ -160,6 +160,8 @@ public:
 //                     [](Query* p){} /* no deleter*/);
 
         include_coords_ = include_coords;
+
+        attrs_ = attrs.cast<std::vector<std::string>>;
     }
 
     void add_dim_range(uint32_t dim_idx, py::tuple r) {
@@ -398,7 +400,7 @@ public:
     py::dict results() {
         py::dict results;
         for (auto &bp : buffers_) {
-            py::print(bp.second.data);
+            results[bp.first] = py::tuple(bp.second.data, bp.second)
         }
         return results;
     }
@@ -436,10 +438,8 @@ PYBIND11_MODULE(core, m) {
             try {
                 if (p) std::rethrow_exception(p);
             } catch (const TileDBPyError &e) {
-                // TODO: set C++ line number if possible
                 PyErr_SetString(tiledb_py_error.ptr(), e.what());
             } catch (const tiledb::TileDBError &e) {
-                // TODO: set C++ line number if possible
                 PyErr_SetString(tiledb_py_error.ptr(), e.what());
             }
             catch (std::exception &e) {
