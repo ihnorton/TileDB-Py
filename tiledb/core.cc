@@ -152,7 +152,7 @@ public:
   PyQuery() = delete;
 
   PyQuery(py::object ctx, py::object array, py::tuple attrs,
-          bool include_coords) {
+          py::object coords) {
 
     tiledb_ctx_t *c_ctx_ = (py::capsule)ctx.attr("__capsule__")();
     if (c_ctx_ == nullptr)
@@ -170,7 +170,10 @@ public:
         new Query(ctx_, *array_, TILEDB_READ)); //,
     //                     [](Query* p){} /* no deleter*/);
 
-    include_coords_ = include_coords;
+    if (coords == py::none())
+      include_coords_ = true;
+    else
+      include_coords_ = coords.cast<bool>();
 
     for (auto a : attrs) {
       attrs_.push_back(a.cast<string>());
@@ -477,7 +480,7 @@ public:
 
 PYBIND11_MODULE(core, m) {
   py::class_<PyQuery>(m, "PyQuery")
-      .def(py::init<py::object, py::object, py::tuple, bool>())
+      .def(py::init<py::object, py::object, py::tuple, py::object>())
       .def("set_ranges", &PyQuery::set_ranges)
       .def("set_buffer", &PyQuery::set_buffer)
       .def("submit", &PyQuery::submit)

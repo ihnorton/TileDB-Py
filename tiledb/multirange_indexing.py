@@ -148,10 +148,7 @@ class MultiRangeIndexer(object):
             return result_dict
         else:
             result_shape = mr_dense_result_shape(ranges, self.schema.shape)
-            for key,item in result_dict.items():
-                # we need to ignore the (empty) offset buffer
-                arr,_ = item
+            for arr in result_dict.values():
                 # TODO check/test layout
                 arr.shape = result_shape
-                result_dict[key] = arr
             return result_dict
