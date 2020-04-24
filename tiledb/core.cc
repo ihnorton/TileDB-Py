@@ -371,7 +371,11 @@ public:
 
         size_t max_retries = 0, retries = 0;
         try {
-            max_retries = std::atoi(ctx_.config().get("py.max_incomplete_retries").c_str());
+            max_retries = std::atoi(
+                ctx_.config().get("py.max_incomplete_retries").c_str());
+            exp_alloc_max_bytes = std::atoi(
+                ctx_.config().get("py.init_buffer_bytes").c_str());
+            )
         } catch (tiledb::TileDBError& e) {
             max_retries = 100;
         }
@@ -381,12 +385,13 @@ public:
         query_->submit();
         }
 
+        // TODO: would be nice to have a callback here to customize the reallocation strategy
         while (query_->query_status() == Query::Status::INCOMPLETE) {
             if (retries > max_retries)
                 TPY_ERROR_LOC("Exceeded maximum retries ('py.max_incomplete_retries': "
                               + std::to_string(max_retries) + "')");
 
-            TPY_ERROR_LOC("UNIMPLEMENTED"); // <TODO>
+
         }
     }
 

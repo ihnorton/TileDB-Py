@@ -113,6 +113,7 @@ class MultiRangeIndexer(object):
         # implements multi-range / outer / orthogonal indexing
         ranges = self.getitem_ranges(idx)
 
+        schema = self.schema
         dom = self.schema.domain
         attr_names = tuple(self.schema.attr(i).name for i in range(self.schema.nattr))
 
@@ -123,18 +124,29 @@ class MultiRangeIndexer(object):
             coords = self.query.coords
 
         # TODO order
-        result_dict = multi_index(
-            self.array,
-            attr_names,
-            ranges,
-            coords=coords
-        )
+        #result_dict = multi_index(
+        #    self.array,
+        #    attr_names,
+        #    ranges,
+        #    coords=coords
+        #)
+
+        from tiledb.core import PyQuery
+        q = PyQuery(self.array._ctx_(), self.array, attr_names, coords)
+
+        q.set_ranges(ranges)
+        q.submit()
+
+        result_dict = q.results()
 
         if self.schema.sparse:
             return result_dict
         else:
             result_shape = mr_dense_result_shape(ranges, self.schema.shape)
-            for arr in result_dict.values():
+            for key,item in result_dict.items():
+                # we need to ignore the (empty) offset buffer
+                arr,_ = item
                 # TODO check/test layout
                 arr.shape = result_shape
+                result_dict[key] = arr
             return result_dict
