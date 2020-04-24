@@ -21,6 +21,7 @@
 
 //#include "readquery.h"
 
+
 /*
 query requires
 - ctx
@@ -39,6 +40,9 @@ using namespace std;
 using namespace tiledb;
 namespace py = pybind11;
 
+const uint64_t DEFAULT_INIT_BUFFER_BYTES = 1310720 * 8;
+const uint64_t DEFAULT_EXP_ALLOC_MAX_BYTES = 4 * pow(2, 30);
+
 class TileDBPyError : std::runtime_error {
 public:
   explicit TileDBPyError(const char *m) : std::runtime_error(m) {}
@@ -50,14 +54,17 @@ public:
   }
 };
 
+static void pyprint(py::object o) {
+    py::print(o);
+}
+
 py::dtype tiledb_dtype(tiledb_datatype_t type);
 
 struct BufferInfo {
 
   BufferInfo(std::string name, tiledb_datatype_t type, size_t elem_bytes,
-             size_t offsets_num)
-      : name(name), type(type) {
-    isvar = (offsets_num > 0);
+             size_t offsets_num, bool isvar = false)
+      : name(name), type(type), isvar(isvar) {
     py::dtype dtype = tiledb_dtype(type);
     data = py::array(dtype, elem_bytes / dtype.itemsize());
     offsets = py::array_t<uint64_t>(offsets_num);
@@ -134,6 +141,8 @@ private:
   std::vector<std::string> attrs_;
   map<string, BufferInfo> buffers_;
   bool include_coords_;
+  uint64_t init_buffer_bytes_ = DEFAULT_INIT_BUFFER_BYTES;
+  uint64_t exp_alloc_max_bytes_ = DEFAULT_EXP_ALLOC_MAX_BYTES;
 
 public:
   tiledb_ctx_t *c_ctx_;
@@ -165,6 +174,18 @@ public:
 
     for (auto a : attrs) {
       attrs_.push_back(a.cast<string>());
+    }
+
+    // get config parameters
+    try {
+      init_buffer_bytes_ =
+          std::atoi(ctx_.config().get("py.init_buffer_bytes").c_str());
+    } catch (TileDBError &e) { /* pass, key not found */ }
+    try {
+      exp_alloc_max_bytes_ =
+          std::atoi(ctx_.config().get("py.exp_alloc_max_bytes").c_str());
+    } catch (TileDBError &e) {
+      /* pass, key not found */
     }
   }
 
@@ -309,19 +330,28 @@ public:
       TPY_ERROR_LOC("Unknown attr or dim '" + (string)name + "'")
   }
 
+  bool is_sparse() { return array_->schema().array_type() == TILEDB_SPARSE; }
+
   void alloc_buffer(std::string name, tiledb_datatype_t type) {
     auto schema = array_->schema();
     uint64_t buf_bytes = 0;
     uint64_t offsets_num = 0;
+    bool var = is_var(name);
 
-    if (is_var(name)) {
+    if (var) {
       auto size_pair = query_->est_result_size_var(name);
       buf_bytes = size_pair.second;
       offsets_num = size_pair.first;
     } else {
       buf_bytes = query_->est_result_size(name);
     }
-    buffers_.insert({name, BufferInfo(name, type, buf_bytes, offsets_num)});
+
+    if ((var || is_sparse()) && buf_bytes < init_buffer_bytes_) {
+      buf_bytes = init_buffer_bytes_;
+      offsets_num = init_buffer_bytes_ / sizeof(uint64_t);
+    }
+
+    buffers_.insert({name, BufferInfo(name, type, buf_bytes, offsets_num, var)});
   }
 
   void set_buffers() {
@@ -335,6 +365,17 @@ public:
       } else {
         query_->set_buffer(b.name, (void *)b.data.data(), b.data.size());
       }
+    }
+  }
+
+  void update_read_elem_num() {
+    for (const auto &read_info : query_->result_buffer_elements()) {
+      auto name = read_info.first;
+      uint64_t offset_elem_num, data_elem_num;
+      std::tie(offset_elem_num, data_elem_num) = read_info.second;
+      BufferInfo &buf = buffers_.at(name);
+      buf.data_read += data_elem_num;
+      buf.offsets_read += offset_elem_num;
     }
   }
 
@@ -356,13 +397,6 @@ public:
 
     set_buffers();
 
-    /*
-    auto exp_alloc_max_bytes =
-        std::atoi(ctx_.config().get("py.exp_alloc_max_bytes").c_str());
-    auto init_buffer_bytes =
-        std::atoi(ctx_.config().get("py.init_buffer_bytes").c_str());
-    */
-
     size_t max_retries = 0, retries = 0;
     try {
       max_retries =
@@ -379,10 +413,36 @@ public:
     // TODO: would be nice to have a callback here to customize the reallocation
     // strategy
     while (query_->query_status() == Query::Status::INCOMPLETE) {
-      if (retries > max_retries)
+      if (++retries > max_retries)
         TPY_ERROR_LOC(
             "Exceeded maximum retries ('py.max_incomplete_retries': " +
             std::to_string(max_retries) + "')");
+
+      if (is_sparse()) {
+        // TODO do we also need to realloc for var-length queries?
+        for (auto bp : buffers_) {
+          auto buf = bp.second;
+          buf.data.resize({buf.data.size() * 2});
+
+          if (buf.isvar)
+            buf.offsets.resize({buf.offsets.size() * 2});
+        }
+      }
+      {
+        py::gil_scoped_release release;
+        query_->submit();
+      }
+
+      update_read_elem_num();
+    }
+
+    update_read_elem_num();
+
+    for (auto bp : buffers_) {
+      auto name = bp.first;
+      auto &buf = bp.second;
+      buf.data.resize({buf.data_read});
+      buf.offsets.resize({buf.offsets_read});
     }
   }
 

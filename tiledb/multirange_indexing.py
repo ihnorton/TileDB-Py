@@ -139,6 +139,11 @@ class MultiRangeIndexer(object):
 
         result_dict = q.results()
 
+        for key, item in result_dict.items():
+            if len(item[1]) > 0:
+                raise TileDBError("Unimplemented var-len unpack!")
+            result_dict[key] = item[0]
+
         if self.schema.sparse:
             return result_dict
         else:
