@@ -1010,6 +1010,7 @@ class DenseArrayTest(DiskTestCase):
         schema = tiledb.ArraySchema(ctx=ctx, domain=dom, attrs=(att,))
         tiledb.DenseArray.create(self.path("foo"), schema)
 
+        print("path is: ", self.path("foo"))
         # write
         with tiledb.DenseArray(self.path("foo"), mode='w', ctx=ctx) as T:
             T[:] = A

@@ -309,7 +309,6 @@ class TestMultiRange(DiskTestCase):
                 orig_array[0],
                 A.multi_index[-10][attr_name]
             )
-            import pdb; pdb.set_trace()
             self.assertEqual(
                 -10,
                 A.multi_index[-10]['coords'].view('i8')

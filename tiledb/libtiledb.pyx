@@ -2657,6 +2657,7 @@ def index_domain_subarray(dom: Domain, idx: tuple):
     Return a numpy array representation of the tiledb subarray buffer
     for a given domain and tuple of index slices
     """
+    print("got index tuple: ", idx)
     ndim = dom.ndim
     if len(idx) != ndim:
         raise IndexError("number of indices does not match domain rank: "
@@ -3628,8 +3629,9 @@ cdef class Array(object):
                  np.issubdtype(array.dtype, np.unicode_) or
                  array.dtype == np.object)
 
+    #cdef _unpack_varlen_query(self, ReadQuery read, unicode name):
     @cython.boundscheck(False)
-    cdef _unpack_varlen_query(self, ReadQuery read, unicode name):
+    cdef _unpack_varlen_query(self, tuple result, unicode name):
         assert(name != "coords")
         assert(self.schema.attr(name).isvar)
 
@@ -3646,9 +3648,11 @@ cdef class Array(object):
 
         cdef np.dtype el_dtype = self.schema.attr(name).dtype
 
-        varbuf = read._buffers[name]
-        offsets = read._offsets[name].view(np.uint64)
-        offsets_ptr = <uint64_t*> np.PyArray_DATA(read._offsets[name])
+        #varbuf = read._buffers[name]
+        #offsets = read._offsets[name].view(np.uint64)
+        varbuf = result[0]
+        offsets = result[1]
+        offsets_ptr = <uint64_t*> np.PyArray_DATA(offsets)
         varbuf_ptr = <char*>np.PyArray_DATA(varbuf)
 
         buffer_size = varbuf.nbytes
@@ -4211,8 +4215,18 @@ cdef class DenseArrayImpl(Array):
 
     cdef _read_dense_subarray(self, np.ndarray subarray, list attr_names, tiledb_layout_t layout):
 
+        #read = ReadQuery(self, subarray, attr_names, layout)
+        from tiledb.core import PyQuery
+        q = PyQuery(self._ctx_(), self, tuple(attr_names), False)
+        q.set_subarray(subarray)
+        q.submit()
+
+        cdef object results = OrderedDict()
+        results = q.results()
+
+        print("got result: ", results)
+
         out = OrderedDict()
-        read = ReadQuery(self, subarray, attr_names, layout)
 
         cdef tuple output_shape
         domain_dtype = self.domain.dtype
@@ -4232,18 +4246,16 @@ cdef class DenseArrayImpl(Array):
 
             name = attr_names[i]
             if name != "coords" and self.schema.attr(name).isvar:
+                print(".. got varlen!")
                 # for var arrays we create an object array
                 dtype = np.object
-                out[name] = self._unpack_varlen_query(read, name).reshape(output_shape)
+                out[name] = self._unpack_varlen_query(results[name], name).reshape(output_shape)
             else:
-                if name == "coords":
-                    dtype = self.coords_dtype
-                else:
-                    dtype = self.schema.attr(name).dtype
+                dtype = q.buffer_dtype(name)
 
                 # <TODO> sanity check the TileDB buffer size against schema?
                 # <TODO> add assert to verify np.require doesn't copy?
-                arr = read._buffers[name]
+                arr = results[name][0]
                 arr.dtype = dtype
                 if len(arr) == 0:
                     # special case: the C API returns 0 len for blank arrays

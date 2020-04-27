@@ -58,7 +58,7 @@ class BasicTest(unittest.TestCase):
         self.assertEqual(q.results()[''], a[:])
 
 
-#BasicTest().test()
+BasicTest().test()
 
 a = tiledb.open(uri)
 r = core.PyQuery(ctx, a, ("",), False)
