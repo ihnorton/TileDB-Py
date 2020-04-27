@@ -21,7 +21,6 @@
 
 //#include "readquery.h"
 
-
 /*
 query requires
 - ctx
@@ -61,7 +60,6 @@ public:
     return std::runtime_error::what();
   }
 };
-
 
 py::dtype tiledb_dtype(tiledb_datatype_t type, uint32_t cell_val_num);
 
@@ -125,9 +123,10 @@ py::dtype tiledb_dtype(tiledb_datatype_t type, uint32_t cell_val_num) {
     return py::dtype("complex64");
   } else if (cell_val_num == 2 && type == TILEDB_FLOAT64) {
     return py::dtype("complex128");
-  } else if (type == TILEDB_CHAR || type == TILEDB_STRING_UTF8 || type == TILEDB_STRING_ASCII) {
+  } else if (type == TILEDB_CHAR || type == TILEDB_STRING_UTF8 ||
+             type == TILEDB_STRING_ASCII) {
     std::string base_str;
-    switch(type) {
+    switch (type) {
     case TILEDB_CHAR:
     case TILEDB_STRING_ASCII:
       base_str = "|S";
@@ -227,7 +226,8 @@ public:
     try {
       init_buffer_bytes_ =
           std::atoi(ctx_.config().get("py.init_buffer_bytes").c_str());
-    } catch (TileDBError &e) { /* pass, key not found */ }
+    } catch (TileDBError &e) { /* pass, key not found */
+    }
     try {
       exp_alloc_max_bytes_ =
           std::atoi(ctx_.config().get("py.exp_alloc_max_bytes").c_str());
@@ -358,7 +358,8 @@ public:
     auto ndim = schema.domain().ndim();
     py::print("got subarray: ", subarray);
     if (subarray.size() != (2 * ndim))
-      TPY_ERROR_LOC("internal error: failed to set subarray (mismatched dimension count");
+      TPY_ERROR_LOC(
+          "internal error: failed to set subarray (mismatched dimension count");
 
     py::object r0, r1;
     for (unsigned dim_idx = 0; dim_idx < ndim; dim_idx++) {
@@ -368,7 +369,6 @@ public:
 
       add_dim_range(dim_idx, py::make_tuple(r0, r1));
     }
-
   }
 
   bool is_dimension(std::string name) {
@@ -450,44 +450,44 @@ public:
     if (cell_val_num != TILEDB_VAR_NUM)
       cell_nbytes *= cell_val_num;
 
-    uint64_t buf_bytes = 0;
+    uint64_t buf_nbytes = 0;
     uint64_t offsets_num = 0;
     bool var = is_var(name);
 
     if (var) {
       auto size_pair = query_->est_result_size_var(name);
-      buf_bytes = size_pair.second;
+      buf_nbytes = size_pair.second;
       offsets_num = size_pair.first;
     } else {
-      buf_bytes = query_->est_result_size(name);
+      buf_nbytes = query_->est_result_size(name);
     }
 
     if ((var || is_sparse()) && buf_bytes < init_buffer_bytes_) {
-      buf_bytes = init_buffer_bytes_;
+      buf_nbytes = init_buffer_bytes_;
       offsets_num = init_buffer_bytes_ / sizeof(uint64_t);
     }
 
-    buffers_.insert({name, BufferInfo(name, type, buf_bytes, offsets_num, var)});
+    buffers_.insert(
+        {name, BufferInfo(name, type, buf_nbytes, cell_nbytes, offsets_num, var)});
   }
 
   void set_buffers() {
     for (auto bp : buffers_) {
       auto name = bp.first;
       const BufferInfo b = bp.second;
-      char* data_ptr = (char*)b.data.data() + (b.data_vals_read * b.cell_nbytes);
-      uint64_t data_nbytes_read = (b.data.size() - b.data_vals_read) * b.cell_nbytes;
+      char *data_ptr =
+          (char *)b.data.data() + (b.data_vals_read * b.cell_nbytes);
+      uint64_t data_nbytes_read =
+          (b.data.size() - b.data_vals_read) * b.cell_nbytes;
 
       if (b.isvar) {
-        uint64_t* offsets_ptr = (uint64_t *)b.offsets.data() + b.offsets_read * sizeof(uint64_t);
-        query_->set_buffer(b.name,
-                           offsets_ptr,
-                           b.offsets.size() - b.offsets_read,
-                           data_ptr,
+        uint64_t *offsets_ptr =
+            (uint64_t *)b.offsets.data() + b.offsets_read * sizeof(uint64_t);
+        query_->set_buffer(b.name, offsets_ptr,
+                           b.offsets.size() - b.offsets_read, data_ptr,
                            data_nbytes_read);
       } else {
-        query_->set_buffer(b.name,
-            data_ptr,
-            data_nbytes_read);
+        query_->set_buffer(b.name, data_ptr, data_nbytes_read);
       }
     }
   }
@@ -537,7 +537,8 @@ public:
     // TODO: would be nice to have a callback here to customize the reallocation
     // strategy
     while (query_->query_status() == Query::Status::INCOMPLETE) {
-      std::cout << ">>>>>>>>>>>>>>> GOT INCOMPLETE <<<<<<<<<<<<<<<<<<" << std::endl;
+      std::cout << ">>>>>>>>>>>>>>> GOT INCOMPLETE <<<<<<<<<<<<<<<<<<"
+                << std::endl;
       if (++retries > max_retries)
         TPY_ERROR_LOC(
             "Exceeded maximum retries ('py.max_incomplete_retries': " +
