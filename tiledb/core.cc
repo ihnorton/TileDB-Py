@@ -67,11 +67,11 @@ py::dtype tiledb_dtype(tiledb_datatype_t type, uint32_t cell_val_num);
 
 struct BufferInfo {
 
-  BufferInfo(std::string name, py::dtype dtype, size_t elem_bytes,
-             size_t offsets_num, bool isvar = false)
-      : name(name), dtype(dtype), isvar(isvar) {
-    data = py::array(dtype, elem_bytes / dtype.itemsize());
-    data_itemsize = dtype.itemsize();
+  BufferInfo(std::string name, py::dtype dtype, size_t data_nbytes,
+             size_t cell_nbytes, size_t offsets_num, bool isvar = false)
+      : name(name), dtype(dtype), cell_nbytes(cell_nbytes), isvar(isvar) {
+
+    data = py::array(dtype, data_nbytes / cell_nbytes);
     offsets = py::array_t<uint64_t>(offsets_num);
   }
 
@@ -81,7 +81,7 @@ struct BufferInfo {
   py::array_t<uint64_t> offsets;
   uint64_t data_vals_read = 0;
   uint64_t offsets_read = 0;
-  size_t data_itemsize;
+  size_t cell_nbytes;
   bool isvar;
 };
 
@@ -442,7 +442,14 @@ public:
 
   void alloc_buffer(std::string name) {
     auto schema = array_->schema();
-    auto dtype = buffer_dtype(name);
+
+    tiledb_datatype_t type;
+    uint32_t cell_val_num;
+    std::tie(type, cell_val_num) = buffer_type(name);
+    uint64_t cell_nbytes = tiledb_datatype_size(type);
+    if (cell_val_num != TILEDB_VAR_NUM)
+      cell_nbytes *= cell_val_num;
+
     uint64_t buf_bytes = 0;
     uint64_t offsets_num = 0;
     bool var = is_var(name);
@@ -460,15 +467,15 @@ public:
       offsets_num = init_buffer_bytes_ / sizeof(uint64_t);
     }
 
-    buffers_.insert({name, BufferInfo(name, dtype, buf_bytes, offsets_num, var)});
+    buffers_.insert({name, BufferInfo(name, type, buf_bytes, offsets_num, var)});
   }
 
   void set_buffers() {
     for (auto bp : buffers_) {
       auto name = bp.first;
       const BufferInfo b = bp.second;
-      char* data_ptr = (char*)b.data.data() + (b.data_vals_read * b.data_itemsize);
-      uint64_t data_nbytes_read = (b.data.size() - b.data_vals_read) * b.data_itemsize;
+      char* data_ptr = (char*)b.data.data() + (b.data_vals_read * b.cell_nbytes);
+      uint64_t data_nbytes_read = (b.data.size() - b.data_vals_read) * b.cell_nbytes;
 
       if (b.isvar) {
         uint64_t* offsets_ptr = (uint64_t *)b.offsets.data() + b.offsets_read * sizeof(uint64_t);
