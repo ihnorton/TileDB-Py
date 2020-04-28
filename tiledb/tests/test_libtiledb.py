@@ -1130,11 +1130,10 @@ class DenseArrayTest(DiskTestCase):
             self.assertTrue(R["floats"].flags.f_contiguous)
 
             R = T.query(attrs=("ints",), coords=True)[0, 0:3]
-            self.assertTrue("coords" in R)
-            assert_array_equal(R["coords"],
-                               np.array([(0, 0), (0, 1), (0, 2)],
-                                        dtype=[('__dim_0', '<i8'),
-                                               ('__dim_1', '<i8')]))
+            self.assertTrue("__dim_0" in R)
+            self.assertTrue("__dim_1" in R)
+            assert_array_equal(R["__dim_0"], np.array([0,0,0]))
+            assert_array_equal(R["__dim_1"], np.array([0,1,2]))
 
             # Global order returns results as a linear buffer
             R = T.query(attrs=("ints",), order='G')[:]

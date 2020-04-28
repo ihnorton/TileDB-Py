@@ -98,7 +98,7 @@ cdef class DomainIndexer(object):
         if isinstance(self.array, SparseArray):
             return (<SparseArrayImpl>self.array)._read_sparse_subarray(subarray, attr_names, layout)
         elif isinstance(self.array, DenseArray):
-            return (<DenseArrayImpl>self.array)._read_dense_subarray(subarray, attr_names, layout)
+            return (<DenseArrayImpl>self.array)._read_dense_subarray(subarray, attr_names, layout, coords)
         else:
             raise Exception("No handler for Array type: " + str(type(self.array)))
 

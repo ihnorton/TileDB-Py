@@ -4187,7 +4187,7 @@ cdef class DenseArrayImpl(Array):
                              "or 'G' (TILEDB_GLOBAL_ORDER)")
         attr_names = list()
         if coords:
-            attr_names.append("coords")
+            attr_names.extend(self.schema.domain.dim(i).name for i in range(self.schema.ndim))
         if attrs is None:
             attr_names.extend(self.schema.attr(i).name for i in range(self.schema.nattr))
         else:
@@ -4197,7 +4197,8 @@ cdef class DenseArrayImpl(Array):
         idx = replace_ellipsis(self.schema.domain.ndim, selection)
         idx, drop_axes = replace_scalars_slice(self.schema.domain, idx)
         subarray = index_domain_subarray(self.schema.domain, idx)
-        out = self._read_dense_subarray(subarray, attr_names, layout)
+        # Note: we included dims (coords) above to match existing semantics
+        out = self._read_dense_subarray(subarray, attr_names, layout, coords)
         if any(s.step for s in idx):
             steps = tuple(slice(None, None, s.step) for s in idx)
             for (k, v) in out.items():
@@ -4213,11 +4214,11 @@ cdef class DenseArrayImpl(Array):
         return out
 
 
-    cdef _read_dense_subarray(self, np.ndarray subarray, list attr_names, tiledb_layout_t layout):
+    cdef _read_dense_subarray(self, np.ndarray subarray, list attr_names,
+                              tiledb_layout_t layout, bint include_coords):
 
-        #read = ReadQuery(self, subarray, attr_names, layout)
         from tiledb.core import PyQuery
-        q = PyQuery(self._ctx_(), self, tuple(attr_names), False)
+        q = PyQuery(self._ctx_(), self, tuple(attr_names), include_coords)
         q.set_subarray(subarray)
         q.submit()
 
@@ -4243,9 +4244,8 @@ cdef class DenseArrayImpl(Array):
         cdef Py_ssize_t nattr = len(attr_names)
         cdef int i
         for i in range(nattr):
-
             name = attr_names[i]
-            if name != "coords" and self.schema.attr(name).isvar:
+            if not self.schema.domain.has_dim(name) and self.schema.attr(name).isvar:
                 print(".. got varlen!")
                 # for var arrays we create an object array
                 dtype = np.object
@@ -4486,7 +4486,7 @@ cdef class DenseArrayImpl(Array):
 
         idx = tuple(slice(None) for _ in range(domain.ndim))
         subarray = index_domain_subarray(domain, idx)
-        out = self._read_dense_subarray(subarray, [attr_name,], cell_layout)
+        out = self._read_dense_subarray(subarray, [attr_name,], cell_layout, False)
         return out[attr_name]
 
     # this is necessary for python 2

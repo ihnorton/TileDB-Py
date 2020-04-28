@@ -1143,7 +1143,7 @@ cdef class SparseArrayImpl(Array):
     cdef _read_sparse_subarray(self, np.ndarray subarray, list attr_names, tiledb_layout_t layout)
 
 cdef class DenseArrayImpl(Array):
-    cdef _read_dense_subarray(self, np.ndarray subarray, list attr_names, tiledb_layout_t layout)
+    cdef _read_dense_subarray(self, np.ndarray subarray, list attr_names, tiledb_layout_t layout, bint include_coords)
 
 cdef class FileHandle(object):
     cdef Ctx ctx

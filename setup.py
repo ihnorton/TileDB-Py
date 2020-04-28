@@ -451,17 +451,6 @@ TESTS_REQUIRE = []
 if ver < (3,):
     TESTS_REQUIRE.extend(["unittest2", "mock"])
 
-# Global variables
-CXXFLAGS = os.environ.get("CXXFLAGS", "").split()
-if not is_windows():
-  CXXFLAGS.append("-std=c++11")
-  if not TILEDB_DEBUG_BUILD:
-    CXXFLAGS.append("-Wno-deprecated-declarations")
-  elif TILEDB_DEBUG_BUILD:
-    CXXFLAGS.append("-g")
-    CXXFLAGS.append("-O0")
-LFLAGS = os.environ.get("LFLAGS", "").split()
-
 # Allow setting (lib) TileDB directory if it is installed on the system
 TILEDB_PATH = os.environ.get("TILEDB_PATH", "")
 
@@ -490,6 +479,18 @@ for arg in args:
     if arg.find('--modular') == 0:
         TILEDBPY_MODULAR = True
         sys.argv.remove(arg)
+
+# Global variables
+CXXFLAGS = os.environ.get("CXXFLAGS", "").split()
+if not is_windows():
+  CXXFLAGS.append("-std=c++11")
+  if not TILEDB_DEBUG_BUILD:
+    CXXFLAGS.append("-Wno-deprecated-declarations")
+  elif TILEDB_DEBUG_BUILD:
+    CXXFLAGS.append("-g")
+    CXXFLAGS.append("-O0")
+    CXXFLAGS.append("-UNDEBUG") # defined by distutils
+LFLAGS = os.environ.get("LFLAGS", "").split()
 
 if TILEDB_PATH != '' and TILEDB_PATH != 'source':
     LIB_DIRS += [os.path.join(TILEDB_PATH, 'lib')]

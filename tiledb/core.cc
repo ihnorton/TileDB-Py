@@ -33,7 +33,7 @@ query requires
    not sure if size estimation works -- it should)
 */
 
-#ifndef NDEBUG
+#if !defined(NDEBUG)
 extern "C" {
 __attribute__((used)) static void pyprint(pybind11::object o) {
   pybind11::print(o);
@@ -65,22 +65,32 @@ py::dtype tiledb_dtype(tiledb_datatype_t type, uint32_t cell_val_num);
 
 struct BufferInfo {
 
-  BufferInfo(std::string name, py::dtype dtype, size_t data_nbytes,
-             size_t cell_nbytes, size_t offsets_num, bool isvar = false)
-      : name(name), dtype(dtype), cell_nbytes(cell_nbytes), isvar(isvar) {
+  BufferInfo(std::string name,
+             size_t data_nbytes,
+             tiledb_datatype_t data_type,
+             uint32_t cell_val_num,
+             size_t offsets_num,
+             bool isvar = false)
 
-    data = py::array(dtype, data_nbytes / cell_nbytes);
+             : name(name), type(data_type), cell_val_num(cell_val_num), isvar(isvar) {
+
+    dtype = tiledb_dtype(data_type, cell_val_num);
+    elem_nbytes = tiledb_datatype_size(type);
+    data = py::array(dtype, data_nbytes / elem_nbytes);
     offsets = py::array_t<uint64_t>(offsets_num);
   }
 
   string name;
+  tiledb_datatype_t type;
   py::dtype dtype;
+  size_t elem_nbytes = 1;
+  uint64_t data_vals_read = 0;
+  uint32_t cell_val_num;
+  uint64_t offsets_read = 0;
+  bool isvar;
+
   py::array data;
   py::array_t<uint64_t> offsets;
-  uint64_t data_vals_read = 0;
-  uint64_t offsets_read = 0;
-  size_t cell_nbytes;
-  bool isvar;
 };
 
 py::dtype tiledb_dtype(tiledb_datatype_t type, uint32_t cell_val_num) {
@@ -213,7 +223,7 @@ public:
         new Query(ctx_, *array_, TILEDB_READ)); //,
     //                     [](Query* p){} /* no deleter*/);
 
-    if (coords == py::none())
+    if (coords.is(py::none()))
       include_coords_ = true;
     else
       include_coords_ = coords.cast<bool>();
@@ -449,6 +459,7 @@ public:
     uint64_t cell_nbytes = tiledb_datatype_size(type);
     if (cell_val_num != TILEDB_VAR_NUM)
       cell_nbytes *= cell_val_num;
+    auto dtype = tiledb_dtype(type,cell_val_num);
 
     uint64_t buf_nbytes = 0;
     uint64_t offsets_num = 0;
@@ -462,23 +473,23 @@ public:
       buf_nbytes = query_->est_result_size(name);
     }
 
-    if ((var || is_sparse()) && buf_bytes < init_buffer_bytes_) {
+    if ((var || is_sparse()) && (buf_nbytes < init_buffer_bytes_)) {
       buf_nbytes = init_buffer_bytes_;
       offsets_num = init_buffer_bytes_ / sizeof(uint64_t);
     }
 
     buffers_.insert(
-        {name, BufferInfo(name, type, buf_nbytes, cell_nbytes, offsets_num, var)});
+        {name, BufferInfo(name, buf_nbytes, type, cell_val_num, offsets_num, var)});
   }
 
   void set_buffers() {
     for (auto bp : buffers_) {
       auto name = bp.first;
       const BufferInfo b = bp.second;
-      char *data_ptr =
-          (char *)b.data.data() + (b.data_vals_read * b.cell_nbytes);
+      void* data_ptr =
+          (void*)((char *)b.data.data() + (b.data_vals_read * b.elem_nbytes));
       uint64_t data_nbytes_read =
-          (b.data.size() - b.data_vals_read) * b.cell_nbytes;
+          (b.data.size() - b.data_vals_read) * b.elem_nbytes;
 
       if (b.isvar) {
         uint64_t *offsets_ptr =
@@ -515,6 +526,7 @@ public:
       }
     }
 
+    // TODO ignore non-requested attributes
     for (auto attr_pair : schema.attributes()) {
       alloc_buffer(attr_pair.first);
     }
@@ -529,13 +541,13 @@ public:
       max_retries = 100;
     }
 
+    // TODO should only have one call to submit below
     {
       py::gil_scoped_release release;
       query_->submit();
     }
 
-    // TODO: would be nice to have a callback here to customize the reallocation
-    // strategy
+    // TODO: would be nice to have a callback here for custom realloc strategy
     while (query_->query_status() == Query::Status::INCOMPLETE) {
       std::cout << ">>>>>>>>>>>>>>> GOT INCOMPLETE <<<<<<<<<<<<<<<<<<"
                 << std::endl;
@@ -544,33 +556,37 @@ public:
             "Exceeded maximum retries ('py.max_incomplete_retries': " +
             std::to_string(max_retries) + "')");
 
+      update_read_elem_num();
+
       // TODO handle linear reallocation
-      if (is_sparse()) {
-        // TODO do we also need to realloc for var-length queries?
-        for (auto bp : buffers_) {
-          auto buf = bp.second;
-          buf.data.resize({buf.data.size() * 2});
+      for (auto bp : buffers_) {
+        auto buf = bp.second;
+        if ( (buf.data_vals_read * buf.elem_nbytes) < buf.data.nbytes() * 2) {
+          buf.data.resize({buf.data.size() * 2}, false);
 
           if (buf.isvar)
-            buf.offsets.resize({buf.offsets.size() * 2});
+            buf.offsets.resize({buf.offsets.size() * 2}, false);
         }
       }
+
+      set_buffers();
       {
         py::gil_scoped_release release;
         query_->submit();
       }
 
-      update_read_elem_num();
-      set_buffers();
     }
 
     update_read_elem_num();
 
+    // resize the output buffers to match the final read total
     for (auto bp : buffers_) {
       auto name = bp.first;
       auto &buf = bp.second;
-      auto type_ncells = buffer_type(name);
-      buf.data.resize({buf.data_vals_read / type_ncells.second});
+      if (buf.isvar)
+        buf.data.resize({buf.data_vals_read / buf.elem_nbytes});
+      else
+        buf.data.resize({buf.data_vals_read / buf.cell_val_num});
       buf.offsets.resize({buf.offsets_read});
     }
   }
