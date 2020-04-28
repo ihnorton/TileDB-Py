@@ -651,7 +651,7 @@ public:
   py::dict results() {
     py::dict results;
     for (auto &bp : buffers_) {
-      bp.second.data.attr("dtype") = bp.second.dtype;
+      bp.second.data.attr("dtype") = tiledb_dtype(bp.second.type, 1);
       results[py::str(bp.first)] =
           py::make_tuple(bp.second.data, bp.second.offsets);
     }
