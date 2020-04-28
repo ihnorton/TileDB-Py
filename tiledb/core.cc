@@ -93,6 +93,7 @@ namespace tiledbpy {
 using namespace std;
 using namespace tiledb;
 namespace py = pybind11;
+using namespace pybind11::literals;
 
 const uint64_t DEFAULT_INIT_BUFFER_BYTES = 1310720 * 8;
 const uint64_t DEFAULT_EXP_ALLOC_MAX_BYTES = 4 * pow(2, 30);
@@ -123,7 +124,7 @@ struct BufferInfo {
 
     dtype = tiledb_dtype(data_type, cell_val_num);
     elem_nbytes = tiledb_datatype_size(type);
-    data = py::array(dtype, data_nbytes / elem_nbytes);
+    data = py::array(py::dtype("uint8"), data_nbytes);
     offsets = py::array_t<uint64_t>(offsets_num);
   }
 
@@ -536,7 +537,7 @@ public:
       void* data_ptr =
           (void*)((char *)b.data.data() + (b.data_vals_read * b.elem_nbytes));
       uint64_t data_nbytes_read =
-          (b.data.size() - b.data_vals_read) * b.elem_nbytes;
+          (b.data.size() - (b.data_vals_read * b.elem_nbytes));
 
       if (b.isvar) {
         uint64_t *offsets_ptr =
@@ -608,6 +609,7 @@ public:
       // TODO handle linear reallocation
       for (auto bp : buffers_) {
         auto buf = bp.second;
+
         if ( (buf.data_vals_read * buf.elem_nbytes) < buf.data.nbytes() * 2) {
           buf.data.resize({buf.data.size() * 2}, false);
 
@@ -630,10 +632,7 @@ public:
     for (auto bp : buffers_) {
       auto name = bp.first;
       auto &buf = bp.second;
-      if (buf.isvar)
-        buf.data.resize({buf.data_vals_read / buf.elem_nbytes});
-      else
-        buf.data.resize({buf.data_vals_read / buf.cell_val_num});
+      buf.data.resize({buf.data_vals_read * buf.elem_nbytes});
       buf.offsets.resize({buf.offsets_read});
     }
   }
@@ -652,6 +651,7 @@ public:
   py::dict results() {
     py::dict results;
     for (auto &bp : buffers_) {
+      bp.second.data.attr("dtype") = bp.second.dtype;
       results[py::str(bp.first)] =
           py::make_tuple(bp.second.data, bp.second.offsets);
     }

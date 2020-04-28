@@ -1214,7 +1214,6 @@ class DenseArrayTest(DiskTestCase):
             config['py.init_buffer_bytes'],
             str(1024**2)
         )
-
         # TODO would be good to check repeat count here. Not currently exposed by retry loop.
         with tiledb.DenseArray(path, ctx=ctx) as A:
             res_mr = A.multi_index[ slice(0, len(data) - 1) ]
