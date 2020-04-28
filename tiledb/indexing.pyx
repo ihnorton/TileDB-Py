@@ -84,7 +84,7 @@ cdef class DomainIndexer(object):
             coords = self.query.coords
 
         if coords:
-            attr_names.insert(0, "coords")
+            attr_names = [dom.dim(idx).name for idx in range(self.schema.ndim)] + attr_names
 
         if order is None or order == 'C':
             layout = TILEDB_ROW_MAJOR

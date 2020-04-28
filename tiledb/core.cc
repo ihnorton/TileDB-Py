@@ -59,6 +59,9 @@ __attribute__((used)) static void pycall1(const char *expr,
    *       use of this function until the process is restarted.
    */
 
+  // usage: given some py::object 'o', exec a string w/ 'local _v'==o, e.g.:
+  //        (lldb) p pycall1("_v.shape", o)
+
   py::object res = py::none();
   try {
     if (!o.is(py::none())) {
@@ -651,7 +654,6 @@ public:
   py::dict results() {
     py::dict results;
     for (auto &bp : buffers_) {
-      bp.second.data.attr("dtype") = tiledb_dtype(bp.second.type, 1);
       results[py::str(bp.first)] =
           py::make_tuple(bp.second.data, bp.second.offsets);
     }

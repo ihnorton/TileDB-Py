@@ -3138,6 +3138,13 @@ cdef class ArraySchema(object):
 
         return bool(has_attr)
 
+    def attr_or_dim_dtype(self, unicode name):
+        if self.has_attr(name):
+            return self.attr(name).dtype
+        elif self.domain.has_dim(name):
+            return self.domain.dim(name).dtype
+        else:
+            raise TileDBError(f"Unknown attribute or dimension ('{name}')")
 
     def dump(self):
         """Dumps a string representation of the array object to standard output (stdout)"""
@@ -4791,7 +4798,7 @@ cdef class SparseArrayImpl(Array):
             raise ValueError("order must be 'C' (TILEDB_ROW_MAJOR), 'F' (TILEDB_COL_MAJOR), or 'G' (TILEDB_GLOBAL_ORDER)")
         attr_names = list()
         if coords:
-            attr_names.append("coords")
+            attr_names.extend(self.schema.domain.dim(i).name for i in range(self.schema.ndim))
         if attrs is None:
             attr_names.extend(self.schema.attr(i).name for i in range(self.schema.nattr))
         else:
@@ -4809,21 +4816,27 @@ cdef class SparseArrayImpl(Array):
         cdef np.npy_intp dims[1]
         cdef Py_ssize_t nattr = len(attr_names)
 
-        read = ReadQuery(self, subarray, attr_names, layout)
+        from tiledb.core import PyQuery
+        q = PyQuery(self._ctx_(), self, tuple(attr_names), True)
+        q.set_subarray(subarray)
+        q.submit()
+
+        cdef object results = OrderedDict()
+        results = q.results()
 
         # collect a list of dtypes for resulting to construct array
         dtypes = list()
         for i in range(nattr):
             name = attr_names[i]
-            if name != "coords" and self.schema.attr(name).isvar:
+            if not self.schema.domain.has_dim(name) and self.schema.attr(name).isvar:
                 # for var arrays we create an object array
-                out[name] = self._unpack_varlen_query(read, name)
+                out[name] = self._unpack_varlen_query(results[name], name)
             else:
-                if name == "coords":
-                    el_dtype = self.coords_dtype
+                if self.schema.domain.has_dim(name):
+                    el_dtype = self.schema.domain.dim(name).dtype
                 else:
                     el_dtype = self.attr(name).dtype
-                arr = read._buffers[name]
+                arr = results[name][0]
 
                 # this is a work-around for NumPy restrictions removed in 1.16
                 if el_dtype == np.dtype('S0'):

@@ -1636,7 +1636,7 @@ class SparseArray(DiskTestCase):
                 np.float32(3.3)
             )
             assert_array_equal(
-                T.query(coords=True).domain_index[-10.0: np.nextafter(4.2, 0)]["coords"]["x"],
+                T.query(coords=True).domain_index[-10.0: np.nextafter(4.2, 0)]["x"],
                 np.float32([2.5])
             )
             assert_array_equal(
@@ -1665,7 +1665,7 @@ class SparseArray(DiskTestCase):
             self.assertEqual(((50, 100),), T.nonempty_domain())
 
             # retrieve just valid coordinates in subarray T[40:60]
-            assert_array_equal(T[40:61]["coords"]["x"], [50, 60])
+            assert_array_equal(T[40:61]["x"], [50, 60])
 
             #TODO: dropping coords with one anon value returns just an array
             res = T.query(coords=False)[40:61]
@@ -1692,7 +1692,7 @@ class SparseArray(DiskTestCase):
             self.assertEqual(((50, 100),), T.nonempty_domain())
 
             # retrieve just valid coordinates in subarray T[40:60]
-            assert_array_equal(T[40:61]["coords"]["x"], [50, 60])
+            assert_array_equal(T[40:61]["x"], [50, 60])
 
             #TODO: dropping coords with one anon value returns just an array
             res = T.query(coords=False)[40:61]
@@ -1720,7 +1720,7 @@ class SparseArray(DiskTestCase):
             self.assertEqual(((3, 100),), T.nonempty_domain())
 
             # retrieve just valid coordinates in subarray T[40:60]
-            assert_array_equal(T[40:61]["coords"]["x"], [50, 60])
+            assert_array_equal(T[40:61]["x"], [50, 60])
 
             #TODO: dropping coords with one anon value returns just an array
             res = T.query(coords=False)[40:61]
@@ -1794,8 +1794,12 @@ class SparseArray(DiskTestCase):
                 data
             )
             assert_array_equal(
-                res['coords'].view(dom.dim(0).dtype).reshape(-1, 2),
-                np.column_stack([c1, c2])
+                res['__dim_0'],
+                c1
+            )
+            assert_array_equal(
+                res['__dim_1'],
+                c2
             )
 
     def test_sparse_mixed_domain_uint_float64(self):
@@ -1814,15 +1818,18 @@ class SparseArray(DiskTestCase):
         tiledb.SparseArray.create(path, schema, ctx=ctx)
 
         data = np.random.rand(500, 63)
-        coords1 = np.repeat(np.arange(0,500), 63)
-        coords2 = np.repeat(np.arange(0,63), 500)
-        #coords2 = np.linspace(-100.0,100.0,63)
-        #coords = np.meshgrid(coords1, coords2)
+        coords1 = np.tile(np.arange(0,500), 63)
+        coords2 = np.tile(np.arange(0,63), 500)
+
+        with tiledb.open(path, 'w') as A:
+            A[coords1, coords2] = data
 
         import warnings
         warnings.warn("NOMERGE MISSING TEST PUT ME BACK")
-        #with tiledb.open(path, 'w') as A:
-        #    A[coords1, coords2] = data
+
+        #with tiledb.open(path) as A:
+        #    res = A[:]
+        #    assert_subarrays_equal(res['val'], data)
 
 class DenseIndexing(DiskTestCase):
 
