@@ -14,16 +14,9 @@
 
 #include <tiledb/tiledb> // C++
 
-#define TPY_ERROR_LOC(m)                                                       \
-  throw TileDBPyError(std::string(m) + " (" + __FILE__ + ":" +                 \
-                      std::to_string(__LINE__) + ")");
-
-/* DEBUGGING HELPER CODE */
 #if !defined(NDEBUG)
 #include "debug.cc"
 #endif
-
-/* END DEBUGGING CODE */
 
 namespace tiledbpy {
 
@@ -31,6 +24,10 @@ using namespace std;
 using namespace tiledb;
 namespace py = pybind11;
 using namespace pybind11::literals;
+
+#define TPY_ERROR_LOC(m)                                                       \
+  throw TileDBPyError(std::string(m) + " (" + __FILE__ + ":" +                 \
+                      std::to_string(__LINE__) + ")");
 
 const uint64_t DEFAULT_INIT_BUFFER_BYTES = 1310720 * 8;
 const uint64_t DEFAULT_EXP_ALLOC_MAX_BYTES = 4 * pow(2, 30);
