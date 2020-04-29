@@ -77,7 +77,6 @@ def read_array():
         # Read the entire array. To get coord values as well, we use the .query() syntax.
         data = A.query(coords=True)[:, :]
         a_vals = data["a"]
-        import pdb;pdb.set_trace()
         rows = data["rows"]
         cols = data["cols"]
         for i in range(rows.shape[0]):
