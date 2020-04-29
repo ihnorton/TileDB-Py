@@ -560,17 +560,18 @@ public:
       const BufferInfo b = bp.second;
       void* data_ptr =
           (void*)((char *)b.data.data() + (b.data_vals_read * b.elem_nbytes));
-      uint64_t data_nbytes_read =
-          (b.data.size() - (b.data_vals_read * b.elem_nbytes));
+      uint64_t data_nelem =
+          (b.data.size() - (b.data_vals_read * b.elem_nbytes)) / b.elem_nbytes;
 
       if (b.isvar) {
         uint64_t *offsets_ptr =
-            (uint64_t *)b.offsets.data() + b.offsets_read * sizeof(uint64_t);
+            (uint64_t *)b.offsets.data() + b.offsets_read;
         query_->set_buffer(b.name, offsets_ptr,
-                           b.offsets.size() - b.offsets_read, data_ptr,
-                           data_nbytes_read);
+                           b.offsets.size() - b.offsets_read,
+                           data_ptr,
+                           data_nelem);
       } else {
-        query_->set_buffer(b.name, data_ptr, data_nbytes_read);
+        query_->set_buffer(b.name, data_ptr, data_nelem);
       }
     }
   }
