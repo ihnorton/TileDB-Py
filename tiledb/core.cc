@@ -404,8 +404,11 @@ public:
       case TILEDB_DATETIME_NS:
       case TILEDB_DATETIME_PS:
       case TILEDB_DATETIME_FS:
-      case TILEDB_DATETIME_AS:
-        TPY_ERROR_LOC("<TODO> datetime conversion unimplemented");
+      case TILEDB_DATETIME_AS: {
+        using T = uint64_t;
+        query_->add_range(dim_idx, r0.cast<T>(), r1.cast<T>());
+        break;
+      }
       default:
         TPY_ERROR_LOC("Unknown dim type conversion!");
       }
