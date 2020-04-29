@@ -146,7 +146,9 @@ struct BufferInfo {
 
 py::dtype tiledb_dtype(tiledb_datatype_t type, uint32_t cell_val_num) {
   if (cell_val_num == 1) {
-    switch (type) {
+    auto np = py::module::import("numpy");
+    auto datetime64 = np.attr("datetime64");
+    switch(type) {
     case TILEDB_INT32:
       return py::dtype("int32");
     case TILEDB_INT64:
@@ -179,6 +181,32 @@ py::dtype tiledb_dtype(tiledb_datatype_t type, uint32_t cell_val_num) {
       TPY_ERROR_LOC("Unimplemented UCS2 or UCS4 string conversion!");
     case TILEDB_CHAR:
       return py::dtype("S1");
+    case TILEDB_DATETIME_YEAR:
+      return datetime64("", "Y");
+    case TILEDB_DATETIME_MONTH:
+      return datetime64("", "M");
+    case TILEDB_DATETIME_WEEK:
+      return datetime64("", "W");
+    case TILEDB_DATETIME_DAY:
+      return datetime64("", "D");
+    case TILEDB_DATETIME_HR:
+      return datetime64("", "h");
+    case TILEDB_DATETIME_MIN:
+      return datetime64("", "m");
+    case TILEDB_DATETIME_SEC:
+      return datetime64("", "s");
+    case TILEDB_DATETIME_MS:
+      return datetime64("", "ms");
+    case TILEDB_DATETIME_US:
+      return datetime64("", "us");
+    case TILEDB_DATETIME_NS:
+      return datetime64("", "ns");
+    case TILEDB_DATETIME_PS:
+      return datetime64("", "ps");
+    case TILEDB_DATETIME_FS:
+      return datetime64("", "fs");
+    case TILEDB_DATETIME_AS:
+      return datetime64("", "as");
     }
   } else if (cell_val_num == 2 && type == TILEDB_FLOAT32) {
     return py::dtype("complex64");
@@ -217,23 +245,12 @@ py::dtype tiledb_dtype(tiledb_datatype_t type, uint32_t cell_val_num) {
   /*
   case TILEDB_ANY:
     TPY_ERROR_LOC("Unimplemented TILEDB_ANY conversion!"); // <TODO>
-  case TILEDB_DATETIME_YEAR:
-  case TILEDB_DATETIME_MONTH:
-  case TILEDB_DATETIME_WEEK:
-  case TILEDB_DATETIME_DAY:
-  case TILEDB_DATETIME_HR:
-  case TILEDB_DATETIME_MIN:
-  case TILEDB_DATETIME_SEC:
-  case TILEDB_DATETIME_MS:
-  case TILEDB_DATETIME_US:
-  case TILEDB_DATETIME_NS:
-  case TILEDB_DATETIME_PS:
-  case TILEDB_DATETIME_FS:
-  case TILEDB_DATETIME_AS:
+
     TPY_ERROR_LOC("Unimplemented datetime conversion!"); // <TODO>
   }
    */
-  TPY_ERROR_LOC("tiledb datatype not understood");
+  TPY_ERROR_LOC("tiledb datatype not understood ('" + tiledb::impl::type_to_str(type)
+                + "', cell_val_num: " + std::to_string(cell_val_num) + ")");
 }
 
 class PyQuery {
