@@ -8,31 +8,15 @@
 #include "numpy/arrayobject.h"
 #undef NPY_NO_DEPRECATED_API
 
-#define TPY_ERROR_LOC(m)                                                       \
-  throw TileDBPyError(std::string(m) + " (" + __FILE__ + ":" +                 \
-                      std::to_string(__LINE__) + ")");
-
-#include <tiledb/tiledb> // C++
 
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 
-#include <tiledb/tiledb.h> // C
+#include <tiledb/tiledb> // C++
 
-//#include "readquery.h"
-
-/*
-query requires
-- ctx
-- array
-- query
-- attribute names
-- ranges or subarray
-
-- (possibly predicted shape for MR indexing of dense?
-   not sure if size estimation works -- it should)
-*/
-
+#define TPY_ERROR_LOC(m)                                                       \
+  throw TileDBPyError(std::string(m) + " (" + __FILE__ + ":" +                 \
+                      std::to_string(__LINE__) + ")");
 
 /* DEBUGGING CODE */
 #if !defined(NDEBUG)
