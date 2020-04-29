@@ -18,59 +18,9 @@
   throw TileDBPyError(std::string(m) + " (" + __FILE__ + ":" +                 \
                       std::to_string(__LINE__) + ")");
 
-/* DEBUGGING CODE */
+/* DEBUGGING HELPER CODE */
 #if !defined(NDEBUG)
-#include <pybind11/embed.h>
-
-namespace {
-extern "C" {
-
-namespace py = pybind11;
-using namespace pybind11::literals;
-
-__attribute__((used)) static void pyprint(pybind11::object o) {
-  pybind11::print(o);
-}
-
-__attribute__((used)) static void pycall1(const char *expr,
-                                          pybind11::object o = py::none()) {
-  // this doesn't work in lldb
-  //py::scoped_interpreter guard{};
-
-  /*
-   * NOTE: the catch statements below do not work in lldb, because exceptions
-   *       are trapped internally. So, an error in eval currently breaks
-   *       use of this function until the process is restarted.
-   */
-
-  // usage: given some py::object 'o', exec a string w/ 'local _v'==o, e.g.:
-  //        (lldb) p pycall1("_v.shape", o)
-
-  py::object res = py::none();
-  try {
-    if (!o.is(py::none())) {
-      auto locals = py::dict("_v"_a = o);
-      res = py::eval(expr, py::globals(), locals);
-    } else {
-      res = py::eval(expr, py::globals());
-    }
-    if (!res.is(py::none())) {
-      py::print(res);
-    }
-  } catch (py::error_already_set &e) {
-    std::cout << "pycall error_already_set: " << std::endl;
-  } catch (std::runtime_error &e) {
-    std::cout << "pycall runtime_error: " << e.what() << std::endl;
-  } catch (...) {
-    std::cout << "pycall unknown exception" << std::endl;
-  }
-}
-
-__attribute__((used)) static void pycall(const char *expr) {
-  pycall1(expr, py::none());
-}
-}
-};
+#include "debug.cc"
 #endif
 
 /* END DEBUGGING CODE */
@@ -191,6 +141,8 @@ py::dtype tiledb_dtype(tiledb_datatype_t type, uint32_t cell_val_num) {
       return datetime64("", "fs");
     case TILEDB_DATETIME_AS:
       return datetime64("", "as");
+    case TILEDB_ANY:
+      break;
     }
   } else if (cell_val_num == 2 && type == TILEDB_FLOAT32) {
     return py::dtype("complex64");
@@ -207,6 +159,8 @@ py::dtype tiledb_dtype(tiledb_datatype_t type, uint32_t cell_val_num) {
     case TILEDB_STRING_UTF8:
       base_str = "|U";
       break;
+    default:
+      TPY_ERROR_LOC("internal error: unhandled string type");
     }
     if (cell_val_num < TILEDB_VAR_NUM) {
       base_str = base_str + std::to_string(cell_val_num);
@@ -221,18 +175,11 @@ py::dtype tiledb_dtype(tiledb_datatype_t type, uint32_t cell_val_num) {
     for (size_t i = 0; i < cell_val_num; i++)
       rec_list.append(rec_elem);
     auto np = py::module::import("numpy");
-    // py::dtype does not accept list
+    // note: we call the 'dtype' constructor b/c py::dtype does not accept list
     auto np_dtype = np.attr("dtype");
     return np_dtype(rec_list);
   }
 
-  /*
-  case TILEDB_ANY:
-    TPY_ERROR_LOC("Unimplemented TILEDB_ANY conversion!"); // <TODO>
-
-    TPY_ERROR_LOC("Unimplemented datetime conversion!"); // <TODO>
-  }
-   */
   TPY_ERROR_LOC("tiledb datatype not understood ('" + tiledb::impl::type_to_str(type)
                 + "', cell_val_num: " + std::to_string(cell_val_num) + ")");
 }
