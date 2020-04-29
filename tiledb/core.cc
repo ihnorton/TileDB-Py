@@ -405,8 +405,10 @@ public:
       case TILEDB_DATETIME_PS:
       case TILEDB_DATETIME_FS:
       case TILEDB_DATETIME_AS: {
-        using T = uint64_t;
-        query_->add_range(dim_idx, r0.cast<T>(), r1.cast<T>());
+        using T = int64_t;
+        auto rr0 = r0.cast<py::array_t<T>>();
+        auto rr1 = r1.cast<py::array_t<T>>();
+        query_->add_range(dim_idx, *rr0.data(), *rr1.data());
         break;
       }
       default:
@@ -437,7 +439,6 @@ public:
   void set_subarray(py::array subarray) {
     auto schema = array_->schema();
     auto ndim = schema.domain().ndim();
-    py::print("got subarray: ", subarray);
     if (subarray.size() != (2 * ndim))
       TPY_ERROR_LOC(
           "internal error: failed to set subarray (mismatched dimension count");
@@ -620,8 +621,8 @@ public:
 
     // TODO: would be nice to have a callback here for custom realloc strategy
     while (query_->query_status() == Query::Status::INCOMPLETE) {
-      std::cout << ">>>>>>>>>>>>>>> GOT INCOMPLETE <<<<<<<<<<<<<<<<<<"
-                << std::endl;
+      //std::cout << ">>>>>>>>>>>>>>> GOT INCOMPLETE <<<<<<<<<<<<<<<<<<"
+                //<< std::endl;
       if (++retries > max_retries)
         TPY_ERROR_LOC(
             "Exceeded maximum retries ('py.max_incomplete_retries': " +

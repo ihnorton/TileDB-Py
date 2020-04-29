@@ -2657,7 +2657,6 @@ def index_domain_subarray(dom: Domain, idx: tuple):
     Return a numpy array representation of the tiledb subarray buffer
     for a given domain and tuple of index slices
     """
-    print("got index tuple: ", idx)
     ndim = dom.ndim
     if len(idx) != ndim:
         raise IndexError("number of indices does not match domain rank: "
@@ -4232,7 +4231,7 @@ cdef class DenseArrayImpl(Array):
         cdef object results = OrderedDict()
         results = q.results()
 
-        print("got result: ", results)
+        #print("got result: ", results)
 
         out = OrderedDict()
 
@@ -4682,14 +4681,9 @@ cdef class SparseArrayImpl(Array):
         ...     with tiledb.SparseArray(tmp + "/array", mode='r') as A:
         ...         # Return an OrderedDict with cell coordinates
         ...         A[0:3, 0:10]
-        ...         # Return the NumpyRecord array of TileDB cell coordinates
-        ...         A[0:3, 0:10]["coords"]
         ...         # Return just the "x" coordinates values
-        ...         A[0:3, 0:10]["coords"]["x"]
-        OrderedDict([('coords', array([(0, 0), (2, 3)],
-              dtype=[('y', '<u8'), ('x', '<u8')])), ('a1', array([1, 2])), ('a2', array([3, 4]))])
-        array([(0, 0), (2, 3)],
-              dtype=[('y', '<u8'), ('x', '<u8')])
+        ...         A[0:3, 0:10]["x"]
+        OrderedDict([('y', array([0, 2], dtype=uint64)), ('x', array([0, 3], dtype=uint64)), ('a1', array([1, 2])), ('a2', array([3, 4]))])
         array([0, 3], dtype=uint64)
 
         With a floating-point array domain, index bounds are inclusive, e.g.:
