@@ -550,8 +550,6 @@ public:
 
     // TODO: would be nice to have a callback here for custom realloc strategy
     while (query_->query_status() == Query::Status::INCOMPLETE) {
-      //std::cout << ">>>>>>>>>>>>>>> GOT INCOMPLETE <<<<<<<<<<<<<<<<<<"
-                //<< std::endl;
       if (++retries > max_retries)
         TPY_ERROR_LOC(
             "Exceeded maximum retries ('py.max_incomplete_retries': " +
@@ -648,7 +646,6 @@ PYBIND11_MODULE(core, m) {
     } catch (const tiledb::TileDBError &e) {
       PyErr_SetString(tiledb_py_error.ptr(), e.what());
     } catch (std::exception &e) {
-      std::cout << "got some other error" << e.what();
     }
   });
 }

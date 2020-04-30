@@ -2661,11 +2661,12 @@ def index_domain_subarray(dom: Domain, idx: tuple):
     if len(idx) != ndim:
         raise IndexError("number of indices does not match domain rank: "
                          "(got {!r}, expected: {!r})".format(len(idx), ndim))
-    # populate a subarray array / buffer to pass to tiledb
-    subarray = np.zeros(shape=(ndim, 2), dtype=dom.dtype)
+
+    subarray = list()
     for r in range(ndim):
         # extract lower and upper bounds for domain dimension extent
         dim = dom.dim(r)
+        dim_dtype = dim.dtype
         (dim_lb, dim_ub) = dim.domain
 
         dim_slice = idx[r]
@@ -2684,13 +2685,13 @@ def index_domain_subarray(dom: Domain, idx: tuple):
                 stop = np.array(stop, dtype=promoted_dtype, ndmin=1)[0]
 
         # Datetimes will be treated specially
-        is_datetime = dim.dtype.kind == 'M'
+        is_datetime = (dim_dtype.kind == 'M')
 
         if start is not None:
             if is_datetime and not isinstance(start, np.datetime64):
                 raise IndexError('cannot index datetime dimension with non-datetime interval')
             # don't round / promote fp slices
-            if np.issubdtype(dim.dtype, np.integer):
+            if np.issubdtype(dim_dtype, np.integer):
                 if isinstance(start, (np.float32, np.float64)):
                     raise IndexError("cannot index integral domain dimension with floating point slice")
                 elif not isinstance(start, _inttypes):
@@ -2709,7 +2710,7 @@ def index_domain_subarray(dom: Domain, idx: tuple):
             if is_datetime and not isinstance(stop, np.datetime64):
                 raise IndexError('cannot index datetime dimension with non-datetime interval')
             # don't round / promote fp slices
-            if np.issubdtype(dim.dtype, np.integer):
+            if np.issubdtype(dim_dtype, np.integer):
                 if isinstance(start, (np.float32, np.float64)):
                     raise IndexError("cannot index integral domain dimension with floating point slice")
                 elif not isinstance(start, _inttypes):
@@ -2724,18 +2725,16 @@ def index_domain_subarray(dom: Domain, idx: tuple):
                 else:
                     stop = int(dim_ub) + 1
         else:
-            if np.issubdtype(dim.dtype, np.floating) or is_datetime:
+            if np.issubdtype(dim_dtype, np.floating) or is_datetime:
                 stop = dim_ub
             else:
                 stop = int(dim_ub) + 1
         if np.issubdtype(type(stop), np.floating) or is_datetime:
             # inclusive bounds for floating point / datetime ranges
-            subarray[r, 0] = start
-            subarray[r, 1] = stop
+            subarray.append((start, stop))
         elif np.issubdtype(type(stop), np.integer):
             # normal python indexing semantics
-            subarray[r, 0] = start
-            subarray[r, 1] = int(stop) - 1
+            subarray.append((start, int(stop) - 1))
         else:
             raise IndexError("domain indexing is defined for integral and floating point values")
     return subarray
@@ -4220,18 +4219,17 @@ cdef class DenseArrayImpl(Array):
         return out
 
 
-    cdef _read_dense_subarray(self, np.ndarray subarray, list attr_names,
+    cdef _read_dense_subarray(self, list subarray, list attr_names,
                               tiledb_layout_t layout, bint include_coords):
 
         from tiledb.core import PyQuery
         q = PyQuery(self._ctx_(), self, tuple(attr_names), include_coords)
-        q.set_subarray(subarray)
+        #q.set_subarray(subarray)
+        q.set_ranges([subarray])
         q.submit()
 
         cdef object results = OrderedDict()
         results = q.results()
-
-        #print("got result: ", results)
 
         out = OrderedDict()
 
@@ -4252,7 +4250,6 @@ cdef class DenseArrayImpl(Array):
         for i in range(nattr):
             name = attr_names[i]
             if not self.schema.domain.has_dim(name) and self.schema.attr(name).isvar:
-                print(".. got varlen!")
                 # for var arrays we create an object array
                 dtype = np.object
                 out[name] = self._unpack_varlen_query(results[name], name).reshape(output_shape)
@@ -4325,7 +4322,7 @@ cdef class DenseArrayImpl(Array):
         cdef Domain domain = self.domain
         cdef tuple idx = replace_ellipsis(domain.ndim, index_as_tuple(selection))
         idx,_drop = replace_scalars_slice(domain, idx)
-        cdef np.ndarray subarray = index_domain_subarray(domain, idx)
+        cdef np.ndarray subarray = np.array(index_domain_subarray(domain, idx))
         cdef Attr attr
         cdef list attributes = list()
         cdef list values = list()
@@ -4804,7 +4801,7 @@ cdef class SparseArrayImpl(Array):
         subarray = index_domain_subarray(dom, idx)
         return self._read_sparse_subarray(subarray, attr_names, layout)
 
-    cdef _read_sparse_subarray(self, np.ndarray subarray, list attr_names, tiledb_layout_t layout):
+    cdef _read_sparse_subarray(self, list subarray, list attr_names, tiledb_layout_t layout):
         cdef object out = OrderedDict()
         # all results are 1-d vectors
         cdef np.npy_intp dims[1]
@@ -4812,7 +4809,8 @@ cdef class SparseArrayImpl(Array):
 
         from tiledb.core import PyQuery
         q = PyQuery(self._ctx_(), self, tuple(attr_names), True)
-        q.set_subarray(subarray)
+        #q.set_subarray(subarray)
+        q.set_ranges([list([x]) for x in subarray])
         q.submit()
 
         cdef object results = OrderedDict()

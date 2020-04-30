@@ -1806,7 +1806,7 @@ class SparseArray(DiskTestCase):
         path = self.path("mixed_domain_uint_float64")
         ctx = tiledb.Ctx()
         dims = [
-            tiledb.Dim(name="index", domain=(0, 501), tile=50, dtype=np.uint64),
+            tiledb.Dim(name="index", domain=(0, 51), tile=11, dtype=np.uint64),
             tiledb.Dim(name="dpos", ctx=ctx, domain=(-100.0, 100.0), tile=10, dtype=np.float64)
         ]
         dom = tiledb.Domain(*dims)
@@ -1817,19 +1817,22 @@ class SparseArray(DiskTestCase):
         schema = tiledb.ArraySchema(domain=dom, attrs=attrs, sparse=True, ctx=ctx)
         tiledb.SparseArray.create(path, schema, ctx=ctx)
 
-        data = np.random.rand(500, 63)
-        coords1 = np.tile(np.arange(0,500), 63)
-        coords2 = np.tile(np.arange(0,63), 500)
+        data = np.random.rand(50, 63)
+        coords1 = np.repeat(np.arange(0,50), 63)
+        coords2 = np.linspace(-100.0,100.0, num=3150)
+
 
         with tiledb.open(path, 'w') as A:
             A[coords1, coords2] = data
 
-        import warnings
-        warnings.warn("NOMERGE MISSING TEST PUT ME BACK")
+        # tiledb returns coordinates in sorted order, so we need to check the output
+        # sorted by the first dim coordinates
+        sidx = np.argsort(coords1, kind='stable')
+        coords2_idx = np.tile(np.arange(0,63), 50)[sidx]
 
-        #with tiledb.open(path) as A:
-        #    res = A[:]
-        #    assert_subarrays_equal(res['val'], data)
+        with tiledb.open(path) as A:
+            res = A[:]
+            assert_subarrays_equal(data[coords1[sidx],coords2_idx[sidx]], res['val'])
 
 class DenseIndexing(DiskTestCase):
 
