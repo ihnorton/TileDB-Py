@@ -3,12 +3,6 @@ from tiledb import Array, ArraySchema
 import os, numpy as np
 import sys, weakref
 
-try:
-    from tiledb.libtiledb import multi_index
-except:
-    from tiledb.indexing import multi_index
-
-
 def mr_dense_result_shape(ranges, base_shape = None):
     # assumptions: len(ranges) matches number of dims
     if base_shape is not None:
