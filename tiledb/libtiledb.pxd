@@ -840,21 +840,6 @@ cdef extern from "tiledb/tiledb.h":
         void* domain,
         int* isempty) nogil
 
-    int tiledb_array_max_buffer_size(
-        tiledb_ctx_t* ctx,
-        tiledb_array_t* array,
-        const char* attribute,
-        const void* subarray,
-        uint64_t* buffer_size) nogil
-
-    int tiledb_array_max_buffer_size_var(
-        tiledb_ctx_t* ctx,
-        tiledb_array_t* array,
-        const char* attribute,
-        const void* subarray,
-        uint64_t* buffer_off_size,
-        uint64_t* buffer_val_size) nogil
-
     int tiledb_array_vacuum(
         tiledb_ctx_t* ctx,
         const char* array_uri,
