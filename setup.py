@@ -240,10 +240,12 @@ def find_or_install_libtiledb(setuptools_cmd):
     :param setuptools_cmd: The setuptools command instance.
     """
     tiledb_ext = None
+    core_ext = None
     for ext in setuptools_cmd.distribution.ext_modules:
         if ext.name == "tiledb.libtiledb":
             tiledb_ext = ext
-            break
+        elif ext.name == "tiledb.core":
+            core_ext = ext
 
     # Download, build and locally install TileDB if needed.
     if hasattr(tiledb_ext, 'tiledb_from_source') or not libtiledb_exists(tiledb_ext.library_dirs):
@@ -285,10 +287,13 @@ def find_or_install_libtiledb(setuptools_cmd):
 
             #
             tiledb_ext.library_dirs += [os.path.join(install_dir, "lib")]
+            core_ext.library_dirs += [os.path.join(install_dir, "lib")]
 
         # Update the TileDB Extension instance with correct paths.
         tiledb_ext.library_dirs += [os.path.join(install_dir, lib_subdir)]
         tiledb_ext.include_dirs += [os.path.join(install_dir, "include")]
+        core_ext.library_dirs += [os.path.join(install_dir, lib_subdir)]
+        core_ext.include_dirs += [os.path.join(install_dir, "include")]
         # Update package_data so the shared object gets installed with the Python module.
         libtiledb_objects = [os.path.join(native_subdir, libname)
                              for libname in libtiledb_library_names()]
