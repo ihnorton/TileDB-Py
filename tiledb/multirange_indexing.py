@@ -1,5 +1,5 @@
 import tiledb
-from tiledb import Array, ArraySchema
+from tiledb import Array, ArraySchema, TileDBError
 import os, numpy as np
 import sys, weakref
 
