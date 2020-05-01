@@ -334,9 +334,12 @@ public:
       case TILEDB_DATETIME_FS:
       case TILEDB_DATETIME_AS: {
         using T = int64_t;
-        auto rr0 = r0.cast<py::array_t<T>>();
-        auto rr1 = r1.cast<py::array_t<T>>();
-        query_->add_range(dim_idx, *rr0.data(), *rr1.data());
+        py::dtype dtype = tiledb_dtype(tiledb_type, 1);
+        auto dt0 = r0.attr("astype")(dtype);
+        auto dt1 = r1.attr("astype")(dtype);
+        // TODO, this is suboptimal, should define pybind converter
+        auto darray = py::array(py::make_tuple(dt0, dt1));
+        query_->add_range(dim_idx, *(int64_t*)darray.data(0), *(int64_t*)darray.data(1));
         break;
       }
       default:

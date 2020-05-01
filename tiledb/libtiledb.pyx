@@ -334,14 +334,13 @@ cdef _write_array(tiledb_ctx_t* ctx_ptr,
     cdef Domain dom = None
     cdef Dim dim = None
     cdef np.dtype dim_dtype = None
-    print("got coords_or_subarray: ", coords_or_subarray)
     if not issparse:
         dom = tiledb_array.schema.domain
         for dim_idx,s_range in enumerate(coords_or_subarray):
             dim = dom.dim(dim_idx)
             dim_dtype = dim.dtype
-            s_start = np.array(s_range[0], dtype=dim_dtype)
-            s_end = np.array(s_range[1], dtype=dim_dtype)
+            s_start = np.asarray(s_range[0], dtype=dim_dtype)
+            s_end = np.asarray(s_range[1], dtype=dim_dtype)
             s_start_ptr = np.PyArray_DATA(s_start)
             s_end_ptr = np.PyArray_DATA(s_end)
             if dim.isvar:
@@ -2693,6 +2692,11 @@ def index_domain_subarray(dom: Domain, idx: tuple):
         dim_dtype = dim.dtype
         (dim_lb, dim_ub) = dim.domain
 
+        if np.issubdtype(dim_dtype, np.str_):
+            if not isinstance(start, (str,unicode)) or not isinstance(stop, (str,unicode)):
+                raise TileDBError(f"Non-string range '({start},{stop})' provided for string dimension '{dim.name}'")
+            subarray.append((start,stop))
+
         dim_slice = idx[r]
         if not isinstance(dim_slice, slice):
             raise IndexError("invalid index type: {!r}".format(type(dim_slice)))
@@ -2701,15 +2705,15 @@ def index_domain_subarray(dom: Domain, idx: tuple):
         #if step and step < 0:
         #    raise IndexError("only positive slice steps are supported")
 
+        # Datetimes will be treated specially
+        is_datetime = (dim_dtype.kind == 'M')
+
         # Promote to a common type
         if start is not None and stop is not None:
             if type(start) != type(stop):
                 promoted_dtype = np.promote_types(type(start), type(stop))
                 start = np.array(start, dtype=promoted_dtype, ndmin=1)[0]
                 stop = np.array(stop, dtype=promoted_dtype, ndmin=1)[0]
-
-        # Datetimes will be treated specially
-        is_datetime = (dim_dtype.kind == 'M')
 
         if start is not None:
             if is_datetime and not isinstance(start, np.datetime64):
@@ -2753,9 +2757,18 @@ def index_domain_subarray(dom: Domain, idx: tuple):
                 stop = dim_ub
             else:
                 stop = int(dim_ub) + 1
-        if np.issubdtype(type(stop), np.floating) or is_datetime:
+
+        if np.issubdtype(type(stop), np.floating):
             # inclusive bounds for floating point / datetime ranges
+            start = dim_dtype.type(start)
+            stop = dim_dtype.type(stop)
             subarray.append((start, stop))
+        elif is_datetime:
+            # need to ensure that datetime ranges are in the units of dim_dtype
+            # so that add_range and output shapes work correctly
+            start = start.astype(dim_dtype)
+            stop = stop.astype(dim_dtype)
+            subarray.append((start,stop))
         elif np.issubdtype(type(stop), np.integer):
             # normal python indexing semantics
             subarray.append((start, int(stop) - 1))
@@ -4027,8 +4040,7 @@ cdef class DenseArrayImpl(Array):
 
         from tiledb.core import PyQuery
         q = PyQuery(self._ctx_(), self, tuple(attr_names), include_coords)
-        #q.set_subarray(subarray)
-        q.set_ranges([subarray])
+        q.set_ranges([list([x]) for x in subarray])
         q.submit()
 
         cdef object results = OrderedDict()
@@ -4039,13 +4051,14 @@ cdef class DenseArrayImpl(Array):
         cdef tuple output_shape
         domain_dtype = self.domain.dtype
         is_datetime = domain_dtype.kind == 'M'
+        # Using the domain check is valid because dense arrays are homogeneous
         if is_datetime:
             output_shape = \
-                tuple(_tiledb_datetime_extent(subarray[r, 0], subarray[r, 1])
+                tuple(_tiledb_datetime_extent(subarray[r][0], subarray[r][1])
                       for r in range(self.schema.ndim))
         else:
             output_shape = \
-                tuple(int(subarray[r, 1]) - int(subarray[r, 0]) + 1
+                tuple(int(subarray[r][1]) - int(subarray[r][0]) + 1
                       for r in range(self.schema.ndim))
 
         cdef Py_ssize_t nattr = len(attr_names)
@@ -4141,8 +4154,8 @@ cdef class DenseArrayImpl(Array):
         elif np.isscalar(val):
             for i in range(self.schema.nattr):
                 attr = self.schema.attr(i)
-                subarray_shape = tuple(int(subarray[r, 1] - subarray[r, 0]) + 1
-                                       for r in range(subarray.shape[0]))
+                subarray_shape = tuple(int(subarray[r][1] - subarray[r][0]) + 1
+                                       for r in range(len(subarray)))
                 attributes.append(attr.name)
                 A = np.empty(subarray_shape, dtype=attr.dtype)
                 A[:] = val
@@ -4400,7 +4413,7 @@ cdef class SparseArrayImpl(Array):
         if not self.isopen or self.mode != 'w':
             raise TileDBError("SparseArray is not opened for writing")
         idx = index_as_tuple(selection)
-        sparse_coords = index_domain_coords(self.schema.domain, idx)
+        sparse_coords = list(index_domain_coords(self.schema.domain, idx))
         ncells = sparse_coords[0].shape[0]
 
         sparse_attributes = list()

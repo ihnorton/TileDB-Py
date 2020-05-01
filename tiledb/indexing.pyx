@@ -63,11 +63,11 @@ cdef class DomainIndexer(object):
             else:
                 new_idx.append(dim_idx)
 
-        subarray = np.zeros(shape=(ndim, 2), dtype=dom.dtype)
+        subarray = list()
 
         for i, subidx in enumerate(new_idx):
             assert isinstance(subidx, slice)
-            subarray[i] = subidx.start, subidx.stop
+            subarray.append((subidx.start, subidx.stop))
 
         attr_names = list(schema.attr(i).name for i in range(schema.nattr))
 
