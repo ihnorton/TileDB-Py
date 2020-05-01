@@ -1174,6 +1174,9 @@ class DenseArrayTest(DiskTestCase):
         with tiledb.DenseArray(uri) as T:
             assert_array_equal(A, T)
 
+            res = T.multi_index[(0,1), (0,1)]['a']
+            assert_array_equal(A, res)
+
     def test_array_2d_s3_mixed(self):
         # This array is currently read back with dtype object
         A = np.array([['AAA', 'B'], ['AB', 'C']], dtype='S3')

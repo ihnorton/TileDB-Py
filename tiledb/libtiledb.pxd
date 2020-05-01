@@ -716,6 +716,15 @@ cdef extern from "tiledb/tiledb.h":
         const void * end,
         const void * stride)
 
+    int tiledb_query_add_range_var(
+        tiledb_ctx_t* ctx,
+        tiledb_query_t* query,
+        uint32_t dim_idx,
+        const void * start,
+        uint64_t start_size,
+        const void * end,
+        uint64_t end_size)
+
     int tiledb_query_get_range(
         tiledb_ctx_t* ctx,
         const tiledb_query_t* query,

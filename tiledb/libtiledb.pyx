@@ -256,7 +256,7 @@ cdef dict get_query_fragment_info(tiledb_ctx_t* ctx_ptr,
 cdef _write_array(tiledb_ctx_t* ctx_ptr,
                   tiledb_array_t* array_ptr,
                   object tiledb_array,
-                  tuple coords_or_subarray,
+                  list coords_or_subarray,
                   list attributes,
                   list values,
                   dict fragment_info):
@@ -327,13 +327,37 @@ cdef _write_array(tiledb_ctx_t* ctx_ptr,
     cdef uint64_t* offsets_buffer_sizes_ptr = <uint64_t*> np.PyArray_DATA(buffer_offsets_sizes)
 
     # set subarray
-    cdef void* subarray_ptr = NULL
+    cdef np.ndarray s_start
+    cdef np.ndarray s_end
+    cdef void* s_start_ptr = NULL
+    cdef void* s_end_ptr = NULL
+    cdef Domain dom = None
+    cdef Dim dim = None
+    cdef np.dtype dim_dtype = None
+    print("got coords_or_subarray: ", coords_or_subarray)
     if not issparse:
-        subarray_ptr = np.PyArray_DATA(coords_or_subarray[0])
-        rc = tiledb_query_set_subarray(ctx_ptr, query_ptr, subarray_ptr)
-    if rc != TILEDB_OK:
-        tiledb_query_free(&query_ptr)
-        _raise_ctx_err(ctx_ptr, rc)
+        dom = tiledb_array.schema.domain
+        for dim_idx,s_range in enumerate(coords_or_subarray):
+            dim = dom.dim(dim_idx)
+            dim_dtype = dim.dtype
+            s_start = np.array(s_range[0], dtype=dim_dtype)
+            s_end = np.array(s_range[1], dtype=dim_dtype)
+            s_start_ptr = np.PyArray_DATA(s_start)
+            s_end_ptr = np.PyArray_DATA(s_end)
+            if dim.isvar:
+                rc = tiledb_query_add_range_var(
+                    ctx_ptr, query_ptr, dim_idx,
+                    s_start_ptr,  s_start.nbytes,
+                    s_end_ptr, s_end.nbytes)
+
+            else:
+                rc = tiledb_query_add_range(
+                    ctx_ptr, query_ptr, dim_idx,
+                    s_start_ptr, s_end_ptr, NULL)
+
+            if rc != TILEDB_OK:
+                tiledb_query_free(&query_ptr)
+                _raise_ctx_err(ctx_ptr, rc)
 
     try:
         for i in range(nattr):
@@ -4101,7 +4125,7 @@ cdef class DenseArrayImpl(Array):
         cdef Domain domain = self.domain
         cdef tuple idx = replace_ellipsis(domain.ndim, index_as_tuple(selection))
         idx,_drop = replace_scalars_slice(domain, idx)
-        cdef np.ndarray subarray = np.array(index_domain_subarray(domain, idx))
+        cdef object subarray = index_domain_subarray(domain, idx)
         cdef Attr attr
         cdef list attributes = list()
         cdef list values = list()
@@ -4155,7 +4179,7 @@ cdef class DenseArrayImpl(Array):
                              "(use a dict({'attr': val}) to "
                              "assign multiple attributes)")
 
-        _write_array(self.ctx.ptr, self.ptr, self, (subarray,), attributes, values, self.last_fragment_info)
+        _write_array(self.ctx.ptr, self.ptr, self, subarray, attributes, values, self.last_fragment_info)
         return
 
     def __array__(self, dtype=None, **kw):
