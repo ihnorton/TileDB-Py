@@ -998,6 +998,7 @@ class DenseArrayTest(DiskTestCase):
                 self.assertEqual(T.dtype, R.dtype)
                 self.assertEqual(R.attr(0).ncells, 2)
                 assert_array_equal(T,R)
+                assert_array_equal(T, R.multi_index[0:2][''])
 
 
     def test_open_with_timestamp(self):
@@ -1198,6 +1199,9 @@ class DenseArrayTest(DiskTestCase):
         with tiledb.DenseArray(uri) as T:
             assert_array_equal(A, T)
 
+            res = T.multi_index[(0,1), (0,1)]['a']
+            assert_array_equal(A, res)
+
     def test_incomplete_dense(self):
         path = self.path("incomplete_dense")
         # create 10 MB array
@@ -1278,6 +1282,8 @@ class DenseVarlen(DiskTestCase):
 
         with tiledb.DenseArray(self.path("foo"), mode='r', ctx=ctx) as T:
             assert_array_equal(A[:], T[:])
+
+            assert_array_equal(A, T.multi_index[1:len(A)][''])
 
 
     def test_varlen_write_unicode(self):

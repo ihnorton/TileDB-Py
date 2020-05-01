@@ -3672,7 +3672,7 @@ cdef class Array(object):
                  array.dtype == np.object)
 
     @cython.boundscheck(False)
-    cdef _unpack_varlen_query(self, tuple result, unicode name):
+    cpdef _unpack_varlen_query(self, tuple result, unicode name):
         assert(name != "coords")
         assert(self.schema.attr(name).isvar)
 

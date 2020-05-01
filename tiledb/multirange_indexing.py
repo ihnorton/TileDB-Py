@@ -118,13 +118,6 @@ class MultiRangeIndexer(object):
             coords = self.query.coords
 
         # TODO order
-        #result_dict = multi_index(
-        #    self.array,
-        #    attr_names,
-        #    ranges,
-        #    coords=coords
-        #)
-
         from tiledb.core import PyQuery
         q = PyQuery(self.array._ctx_(), self.array, attr_names, coords)
 
@@ -133,11 +126,13 @@ class MultiRangeIndexer(object):
 
         result_dict = q.results()
 
-        for key, item in result_dict.items():
+        for name, item in result_dict.items():
             if len(item[1]) > 0:
-                raise TileDBError("Unimplemented var-len unpack!")
-            item[0].dtype = schema.attr_or_dim_dtype(key)
-            result_dict[key] = item[0]
+                arr = self.array._unpack_varlen_query(item, name)
+            else:
+                arr = item[0]
+                arr.dtype = schema.attr_or_dim_dtype(name)
+            result_dict[name] = arr
 
         if self.schema.sparse:
             return result_dict
