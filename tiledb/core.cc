@@ -545,7 +545,7 @@ public:
       max_retries = 100;
     }
 
-    // TODO should only have one call to submit below
+    // TODO ideally only have one call to submit below
     {
       py::gil_scoped_release release;
       query_->submit();

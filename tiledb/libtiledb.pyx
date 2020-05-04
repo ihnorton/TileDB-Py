@@ -308,11 +308,20 @@ cdef _write_array(tiledb_ctx_t* ctx_ptr,
     # Set coordinate buffer size and name, and layout for sparse writes
     if issparse:
         for dim_idx in range(tiledb_array.schema.ndim):
-            attributes.append(tiledb_array.schema.domain.dim(dim_idx).name)
-            buffer_sizes[nattr + dim_idx] = coords_or_subarray[dim_idx].nbytes
+            name = tiledb_array.schema.domain.dim(dim_idx).name
+            val = coords_or_subarray[dim_idx]
+            if tiledb_array.schema.domain.dim(dim_idx).isvar:
+                buffer, offsets = array_to_buffer(val)
+                buffer_sizes[nattr + dim_idx] = buffer.nbytes
+                buffer_offsets_sizes[nattr + dim_idx] = offsets.nbytes
+            else:
+                buffer, offsets = val, None
+                buffer_sizes[nattr + dim_idx] = buffer.nbytes
+
+            attributes.append(name)
+            output_values.append(buffer)
+            output_offsets.append(offsets)
         nattr += tiledb_array.schema.ndim
-        output_values.extend(coords_or_subarray)
-        output_offsets.extend(list(None for _ in range(tiledb_array.schema.ndim)))
         layout = TILEDB_UNORDERED
 
     rc = tiledb_query_set_layout(ctx_ptr, query_ptr, layout)
@@ -326,7 +335,7 @@ cdef _write_array(tiledb_ctx_t* ctx_ptr,
     cdef uint64_t* buffer_sizes_ptr = <uint64_t*> np.PyArray_DATA(buffer_sizes)
     cdef uint64_t* offsets_buffer_sizes_ptr = <uint64_t*> np.PyArray_DATA(buffer_offsets_sizes)
 
-    # set subarray
+    # set subarray (ranges)
     cdef np.ndarray s_start
     cdef np.ndarray s_end
     cdef void* s_start_ptr = NULL
@@ -359,7 +368,7 @@ cdef _write_array(tiledb_ctx_t* ctx_ptr,
                 _raise_ctx_err(ctx_ptr, rc)
 
     try:
-        for i in range(nattr):
+        for i in range(0, nattr):
             battr_name = attributes[i].encode('UTF-8')
             buffer_ptr = np.PyArray_DATA(output_values[i])
 
@@ -2392,12 +2401,13 @@ cdef class Dim(object):
         :rtype: tuple(numpy scalar, numpy scalar)
 
         """
+        if self.dtype == np.bytes_:
+            return (None, None)
         cdef const void* domain_ptr = NULL
         check_error(self.ctx,
                     tiledb_dimension_get_domain(self.ctx.ptr,
                                                 self.ptr,
                                                 &domain_ptr))
-        assert(domain_ptr != NULL)
         cdef np.npy_intp shape[1]
         shape[0] = <np.npy_intp> 2
         cdef tiledb_datatype_t tiledb_type = self._get_type()
@@ -2692,16 +2702,18 @@ def index_domain_subarray(dom: Domain, idx: tuple):
         dim_dtype = dim.dtype
         (dim_lb, dim_ub) = dim.domain
 
-        if np.issubdtype(dim_dtype, np.str_):
-            if not isinstance(start, (str,unicode)) or not isinstance(stop, (str,unicode)):
-                raise TileDBError(f"Non-string range '({start},{stop})' provided for string dimension '{dim.name}'")
-            subarray.append((start,stop))
-
         dim_slice = idx[r]
         if not isinstance(dim_slice, slice):
             raise IndexError("invalid index type: {!r}".format(type(dim_slice)))
 
         start, stop, step = dim_slice.start, dim_slice.stop, dim_slice.step
+
+        if np.issubdtype(dim_dtype, np.str_) or np.issubdtype(dim_dtype, np.bytes_):
+            if not isinstance(start, (str,unicode)) or not isinstance(stop, (str,unicode)):
+                raise TileDBError(f"Non-string range '({start},{stop})' provided for string dimension '{dim.name}'")
+            subarray.append((start,stop))
+            continue
+
         #if step and step < 0:
         #    raise IndexError("only positive slice steps are supported")
 
@@ -3674,7 +3686,6 @@ cdef class Array(object):
     @cython.boundscheck(False)
     cpdef _unpack_varlen_query(self, tuple result, unicode name):
         assert(name != "coords")
-        assert(self.schema.attr(name).isvar)
 
         cdef:
             char* varbuf_ptr = NULL
@@ -3687,7 +3698,8 @@ cdef class Array(object):
             np.ndarray out_array
             uint64_t el = 0, num_offsets = 0, buffer_size = 0
 
-        cdef np.dtype el_dtype = self.schema.attr(name).dtype
+        cdef np.dtype el_dtype = self.schema.attr(name).dtype if self.schema.has_attr(name) \
+                                                              else self.schema.domain.dim(name).dtype
 
         #varbuf = read._buffers[name]
         #offsets = read._offsets[name].view(np.uint64)
@@ -3699,7 +3711,7 @@ cdef class Array(object):
         buffer_size = varbuf.nbytes
         num_offsets = len(offsets)
 
-        if (self.schema.attr(name).isvar or
+        if (self.schema._needs_var_buffer(name) or
             np.issubdtype(el_dtype, np.unicode_) or
             np.issubdtype(el_dtype, np.bytes_)):
            out_array = np.empty(num_offsets, dtype=np.object)
@@ -4340,7 +4352,7 @@ cdef class DenseArrayImpl(Array):
                       timestamp=timestamp, ctx=ctx)
 
 # point query index a tiledb array (zips) columnar index vectors
-def index_domain_coords(Domain dom, tuple idx):
+def index_domain_coords(dom: Domain, idx: tuple):
     """
     Returns a (zipped) coordinate array representation
     given coordinate indices in numpy's point indexing format
@@ -4349,17 +4361,24 @@ def index_domain_coords(Domain dom, tuple idx):
     if ndim != dom.ndim:
         raise IndexError("sparse index ndim must match "
                          "domain ndim: {0!r} != {1!r}".format(ndim, dom.ndim))
-    idx = tuple(np.asarray(idx[i], dtype=dom.dim(i).dtype)
+    idx = tuple(np.array(idx[i], dtype=dom.dim(i).dtype, ndmin=1)
                 for i in range(ndim))
+
     # check that all sparse coordinates are the same size and dtype
-    len0, dtype0 = len(idx[0]), idx[0].dtype
-    for i in range(2, ndim):
-        if len(idx[i]) != len0:
+    dim0 = dom.dim(0)
+    dim0_type = dim0.dtype
+    len0 = len(idx[0])
+    for dim_idx in range(ndim):
+        dim_dtype = dom.dim(dim_idx).dtype
+        if len(idx[dim_idx]) != len0:
             raise IndexError("sparse index dimension length mismatch")
-        if idx[i].dtype != dtype0:
+
+        if np.issubdtype(dim_dtype, np.str_) or np.issubdtype(dim_dtype, np.bytes_):
+            if not (np.issubdtype(idx[dim_idx].dtype, np.str_) or \
+                    np.issubdtype(idx[dim_idx].dtype, np.bytes_)):
+                raise IndexError("sparse index dimension dtype mismatch")
+        elif idx[dim_idx].dtype != dim_dtype:
             raise IndexError("sparse index dimension dtype mismatch")
-    # zip coordinates
-    #return np.column_stack(idx)
     return idx
 
 cdef class SparseArrayImpl(Array):
@@ -4414,6 +4433,7 @@ cdef class SparseArrayImpl(Array):
             raise TileDBError("SparseArray is not opened for writing")
         idx = index_as_tuple(selection)
         sparse_coords = list(index_domain_coords(self.schema.domain, idx))
+        dim0_dtype = self.schema.domain.dim(0).dtype
         ncells = sparse_coords[0].shape[0]
 
         sparse_attributes = list()
@@ -4636,7 +4656,7 @@ cdef class SparseArrayImpl(Array):
         dtypes = list()
         for i in range(nattr):
             name = attr_names[i]
-            if not self.schema.domain.has_dim(name) and self.schema.attr(name).isvar:
+            if self.schema._needs_var_buffer(name):
                 # for var arrays we create an object array
                 out[name] = self._unpack_varlen_query(results[name], name)
             else:
