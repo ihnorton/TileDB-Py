@@ -3630,6 +3630,49 @@ cdef class Array(object):
         :raises TypeError: invalid key type"""
         return self.schema.domain.dim(dim_id)
 
+    def _nonempty_domain_var(self):
+        cdef list result = list()
+        cdef Domain dom = self.schema.domain
+
+        cdef tiledb_ctx_t* ctx_ptr = self.ctx.ptr
+        cdef tiledb_array_t* array_ptr = self.ptr
+        cdef int rc = TILEDB_OK
+        cdef uint32_t dim_idx
+
+        cdef np.ndarray dim_dom_sizes = np.zeros(shape=(dom.ndim, 2), dtype=np.uint64)
+        cdef uint64_t start_size
+        cdef uint64_t end_size
+        cdef int32_t is_empty
+        cdef np.ndarray start_buf
+        cdef np.ndarray end_buf
+        cdef void* start_buf_ptr
+        cdef void* end_buf_ptr
+
+        for dim_idx in range(dom.ndim):
+            rc = tiledb_array_get_non_empty_domain_var_size_from_index(
+                    ctx_ptr, array_ptr, dim_idx, &start_size, &end_size, &is_empty)
+            if rc != TILEDB_OK:
+                _raise_ctx_err(ctx_ptr, rc)
+
+            if (is_empty):
+                result.append((None, None))
+                continue
+
+            start_buf = np.array(start_size, dom.dim(dim_idx).dtype)
+            end_buf = np.array(start_size, dom.dim(dim_idx).dtype)
+            start_buf_ptr = np.PyArray_DATA(start_buf)
+            end_buf_ptr = np.PyArray_DATA(end_buf)
+
+            rc = tiledb_array_get_non_empty_domain_var_from_index(
+                ctx_ptr, array_ptr, dim_idx, start_buf_ptr, end_buf_ptr, &is_empty
+            )
+            if rc != TILEDB_OK:
+                _raise_ctx_err(ctx_ptr, rc)
+
+            result.append((start_buf.item(0), end_buf.item(0)))
+
+        return tuple(result)
+
     def nonempty_domain(self):
         """Return the minimum bounding domain which encompasses nonempty values.
 
@@ -3638,6 +3681,8 @@ cdef class Array(object):
 
         """
         cdef Domain dom = self.schema.domain
+        if (any([dom.dim(idx).isvar for idx in range(dom.ndim)])):
+            return self._nonempty_domain_var()
         cdef np.ndarray extents = np.zeros(shape=(dom.ndim, 2), dtype=dom.dtype)
 
         cdef tiledb_ctx_t* ctx_ptr = self.ctx.ptr
