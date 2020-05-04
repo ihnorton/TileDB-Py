@@ -2709,7 +2709,7 @@ def index_domain_subarray(dom: Domain, idx: tuple):
         start, stop, step = dim_slice.start, dim_slice.stop, dim_slice.step
 
         if np.issubdtype(dim_dtype, np.str_) or np.issubdtype(dim_dtype, np.bytes_):
-            if not isinstance(start, (str,unicode)) or not isinstance(stop, (str,unicode)):
+            if not isinstance(start, (bytes,unicode)) or not isinstance(stop, (bytes,unicode)):
                 raise TileDBError(f"Non-string range '({start},{stop})' provided for string dimension '{dim.name}'")
             subarray.append((start,stop))
             continue
@@ -3639,7 +3639,6 @@ cdef class Array(object):
         cdef int rc = TILEDB_OK
         cdef uint32_t dim_idx
 
-        cdef np.ndarray dim_dom_sizes = np.zeros(shape=(dom.ndim, 2), dtype=np.uint64)
         cdef uint64_t start_size
         cdef uint64_t end_size
         cdef int32_t is_empty
@@ -3647,6 +3646,8 @@ cdef class Array(object):
         cdef np.ndarray end_buf
         cdef void* start_buf_ptr
         cdef void* end_buf_ptr
+        cdef np.dtype start_dtype
+        cdef np.dtype end_dtype
 
         for dim_idx in range(dom.ndim):
             rc = tiledb_array_get_non_empty_domain_var_size_from_index(
@@ -3658,8 +3659,15 @@ cdef class Array(object):
                 result.append((None, None))
                 continue
 
-            start_buf = np.array(start_size, dom.dim(dim_idx).dtype)
-            end_buf = np.array(start_size, dom.dim(dim_idx).dtype)
+            start_dtype = dom.dim(dim_idx).dtype
+            if np.issubdtype(start_dtype, np.str_) or np.issubdtype(start_dtype, np.bytes_):
+                buf_dtype = 'S'
+                start_buf = np.empty(end_size, 'S' + str(start_size))
+                end_buf = np.empty(end_size, 'S' + str(end_size))
+            else:
+                start_buf = np.empty(1, start_dtype)
+                end_buf = np.empty(1, start_dtype)
+
             start_buf_ptr = np.PyArray_DATA(start_buf)
             end_buf_ptr = np.PyArray_DATA(end_buf)
 
