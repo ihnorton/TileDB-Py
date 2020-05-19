@@ -249,16 +249,16 @@ def find_or_install_libtiledb(setuptools_cmd):
     """
     tiledb_ext = None
     core_ext = None
-    print("ext_modules: ", setuptools_cmd.distribution.ext_modules)
+    print("  ext_modules: ", setuptools_cmd.distribution.ext_modules)
     for ext in setuptools_cmd.distribution.ext_modules:
         if ext.name == "tiledb.libtiledb":
             tiledb_ext = ext
         elif ext.name == "tiledb.core":
             core_ext = ext
 
-    print("tiledb_ext: ", tiledb_ext)
-    print("core_ext: ", core_ext)
-    print("tiledb_ext.library_dirs: ", tiledb_ext.library_dirs)
+    print("  tiledb_ext: ", tiledb_ext)
+    print("  core_ext: ", core_ext)
+    print("  tiledb_ext.library_dirs: ", tiledb_ext.library_dirs)
     wheel_build = getattr(tiledb_ext, 'tiledb_wheel_build', False)
     from_source = getattr(tiledb_ext, 'tiledb_from_source', False)
     lib_exists = libtiledb_exists(tiledb_ext.library_dirs)
@@ -274,16 +274,22 @@ def find_or_install_libtiledb(setuptools_cmd):
     elif hasattr(tiledb_ext, 'tiledb_path'):
         prefix_dir = getattr(tiledb_ext, 'tiledb_path')
 
+    # Update the TileDB Extension instance with correct build-time paths.
+    lib_subdir = 'bin' if os.name=='nt' else 'lib'
+    native_subdir = '' if is_windows() else 'native'
 
-    if wheel_build and is_windows() and lib_exists:
+    tiledb_ext.library_dirs += [os.path.join(prefix_dir, lib_subdir)]
+    tiledb_ext.include_dirs += [os.path.join(prefix_dir, "include")]
+    core_ext.library_dirs += [os.path.join(prefix_dir, lib_subdir)]
+    core_ext.include_dirs += [os.path.join(prefix_dir, "include")]
+
+    # If `!lib_exists` then we are definitely building from source
+    if (wheel_build or is_windows()) or not lib_exists:
         do_install = True
 
-    print("prefix_dir: ", core_ext)
-    print("do_install: ", do_install)
+    print("  do_install: ", do_install)
 
     if do_install:
-        lib_subdir = 'bin' if os.name=='nt' else 'lib'
-        native_subdir = '' if is_windows() else 'native'
         # Copy libtiledb shared object(s) to the package directory so they can be found
         # with package_data.
         dest_dir = os.path.join(TILEDB_PKG_DIR, native_subdir)
@@ -318,12 +324,6 @@ def find_or_install_libtiledb(setuptools_cmd):
             tiledb_ext.library_dirs += [os.path.join(prefix_dir, "lib")]
             core_ext.library_dirs += [os.path.join(prefix_dir, "lib")]
 
-        # Update the TileDB Extension instance with correct build-time paths.
-        tiledb_ext.library_dirs += [os.path.join(prefix_dir, lib_subdir)]
-        tiledb_ext.include_dirs += [os.path.join(prefix_dir, "include")]
-        core_ext.library_dirs += [os.path.join(prefix_dir, lib_subdir)]
-        core_ext.include_dirs += [os.path.join(prefix_dir, "include")]
-
         # Update package_data so the shared object gets installed with the Python module.
         libtiledb_objects = [os.path.join(native_subdir, libname)
                              for libname in libtiledb_library_names()]
@@ -335,6 +335,9 @@ def find_or_install_libtiledb(setuptools_cmd):
             # should only ever be 1, not sure why libtiledb_library_names -> List
             try:
                 ctypes.CDLL(test_path)
+                print("\n-------------------")
+                print("Successfully loaded shared library: {}".format(test_path))
+                print("-------------------\n")
             except:
                 print("\n-------------------")
                 print("Failed to load shared library: {}".format(test_path))
@@ -352,6 +355,10 @@ def find_or_install_libtiledb(setuptools_cmd):
         print("libtiledb_objects: ", libtiledb_objects)
         print("-------------------\n")
         setuptools_cmd.distribution.package_data.update({"tiledb": libtiledb_objects})
+        print("\n-------------------")
+        print("package data: \n")
+        print(setuptools_cmd.distribution.package_data)
+        print("-------------------\n")
 
 
 class LazyCommandClass(dict):
