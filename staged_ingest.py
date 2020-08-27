@@ -60,17 +60,6 @@ schema = pa.schema(fields, metadata=metadata)
 ts_parsers = ["%Y%m%d%H%M%S", "%Y-%m-%d %H:%M:%S"]
 csv_conv_opts = pa.csv.ConvertOptions(column_types=schema, timestamp_parsers=ts_parsers)
 
-#%%
-#t = pa.csv.read_csv#("../subset_100/exactEarth_20190802193000_20190802200000.csv",
-#                    convert_options=csv_conv_opts)
-#def run_all(input_csvs):
-#    pool_dir = "/test_deleteme19Aug2020/test/tmp_pool"
-#    if os.path.isdir(pool_dir):
-#        raise Exception("pool_dir exists")
-#    step = 5
-#    for csv_idx in range(0, len(input_csvs), 10):
-#        run_csvs(input_csvs[csv_idx:csv_idx+step])
-
 # %%
 def filter_df_lon(df, lon0, lon1):
     ln = df.longitude
