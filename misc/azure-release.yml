@@ -44,7 +44,7 @@ stages:
       vmImage: $(imageName)
 
     steps:
-    - script: git tag $(TILEDBPY_VERSION)
+    - script: git tag -f $(TILEDBPY_VERSION)
     - task: DownloadPipelineArtifact@2
       displayName: 'Download libtiledb artifact'
       inputs:
