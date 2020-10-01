@@ -136,7 +136,7 @@ stages:
       vmImage: $(imageName)
 
     steps:
-    - script: git tag $(TILEDBPY_VERSION)
+    - script: git tag -f $(TILEDBPY_VERSION)
     - bash: |
         docker build -f misc/pypi_linux/Dockerfile . -t wheel_builder
         docker run -v `pwd`/wheelhouse:/wheels -t wheel_builder build.sh
@@ -152,7 +152,7 @@ stages:
       vmImage: $(imageName)
 
     steps:
-    - script: git tag $(TILEDBPY_VERSION)
+    - script: git tag -f $(TILEDBPY_VERSION)
     - bash: |
         docker build -f misc/pypi_linux/Dockerfile2010 . -t wheel_builder_2010
         docker run -v `pwd`/wheelhouse:/wheels -t wheel_builder_2010 build.sh
