@@ -148,7 +148,7 @@ tasks = []
 
 # this must be a separate cell because python import system is broken
 def run_mp(output_array):
-    pool_dir = "/test_deleteme19Aug2020/test/tmp_pool_hold"
+    pool_dir = "/test_vol_10Oct2020/staged/data/tmp_pool"
     if not os.path.isdir(pool_dir):
         raise Exception("pool_dir does not exist")
 
@@ -156,7 +156,7 @@ def run_mp(output_array):
 
     append = False
 
-    nproc = 2
+    nproc = 8
     #subset_count = 1
     subset_count = -1
 
@@ -199,7 +199,7 @@ def run_mp(output_array):
 
 
 # %%
-output_array = "/test_deleteme19Aug2020/test/full_array.tdb"
+output_array = "/test_vol_10Oct2020/staged/full_array.tdb"
 #output_array = "/test_deleteme19Aug2020/test/subset_1.tdb"
 
 if __name__ == '__main__':

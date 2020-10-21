@@ -54,13 +54,16 @@ fields = [
 schema = pa.schema(fields, metadata=metadata)
 
 # %%
+
 # dt column format examples
 # ts_: 20190802193001
 # ds_:  2019-08-02 19:30:0
+
 ts_parsers = ["%Y%m%d%H%M%S", "%Y-%m-%d %H:%M:%S"]
 csv_conv_opts = pa.csv.ConvertOptions(column_types=schema, timestamp_parsers=ts_parsers)
 
 # %%
+
 def filter_df_lon(df, lon0, lon1):
     ln = df.longitude
     if lon0 == -180:
@@ -70,10 +73,37 @@ def filter_df_lon(df, lon0, lon1):
 
     return df.loc[idx]
 
+def run_mp():
+    pool_dir = "/test_vol_10Oct2020/staged/data/tmp_pool"
+    if os.path.isdir(pool_dir):
+        raise Exception("pool_dir exists")
+
+    #input_csvs = glob.glob("../subset_100/*.csv")
+    input_csvs = glob.glob("/test_vol_10Oct2020/exactearth_201908/*.csv")
+
+    #import pdb; pdb.set_trace()
+    nproc = 8
+    step = 10
+    with ProcessPoolExecutor(max_workers=nproc) as executor:
+        for csv_idx in range(0,len(input_csvs), step):
+            last = csv_idx + step
+            if last > len(input_csvs):
+                last = len(input_csvs)
+            subset = input_csvs[csv_idx:last]
+            # generate a unique UUID for this subset for tracing
+            subset_uuid = uuid.uuid1()
+
+            print(f"running: {subset_uuid}, {len(subset)} {subset[0]} .. {subset[-1]}")
+
+            task = executor.submit(
+                run_csvs,
+                *(subset, subset_uuid),
+            )
+
 def run_csvs(csvs, subset_uuid):
     print("running: ", csvs)
     #import pdb; pdb.set_trace()
-    pool_dir = "/test_deleteme19Aug2020/test/tmp_pool"
+    pool_dir = "/test_vol_10Oct2020/staged/data/tmp_pool"
     if not os.path.isdir(pool_dir):
         os.mkdir(pool_dir)
 
@@ -105,32 +135,6 @@ def run_csvs(csvs, subset_uuid):
         f.writelines([c+"\n" for c in csvs])
     print("---")
 
-# %%
-def run_mp():
-    pool_dir = "/test_deleteme19Aug2020/test/tmp_pool"
-    if os.path.isdir(pool_dir):
-        raise Exception("pool_dir exists")
 
-    #input_csvs = glob.glob("../subset_100/*.csv")
-    input_csvs = glob.glob("/test_deleteme19Aug2020/exactearth_201908/*.csv")
 
-    #import pdb; pdb.set_trace()
-    nproc = 24
-    step = 10
-    with ProcessPoolExecutor(max_workers=nproc) as executor:
-        for csv_idx in range(0,len(input_csvs), step):
-            last = csv_idx + step
-            if last > len(input_csvs):
-                last = len(input_csvs)
-            subset = input_csvs[csv_idx:last]
-            # generate a unique UUID for this subset for tracing
-            subset_uuid = uuid.uuid1()
-
-            print(f"running: {subset_uuid}, {len(subset)} {subset[0]} .. {subset[-1]}")
-
-            task = executor.submit(
-                run_csvs,
-                *(subset, subset_uuid),
-            )
-# %%
 # %%
